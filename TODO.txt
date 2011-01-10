@@ -1,0 +1,8 @@
+Current problems are tracked at:
+
+http://code.google.com/p/ice-cache-explorer/issues/list
+
+For ideas what should be done in the more distant future, see:
+http://code.google.com/p/ice-cache-explorer/wiki/Discussion
+
+For future plans ask on http://bilzlee.blogspot.com :)

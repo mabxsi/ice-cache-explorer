@@ -56,7 +56,7 @@ class PanTool(ViewTool):
         self.panning_vec = Vec3()
         self.key = QtCore.Qt.Key_P
         #self.cursor = QtGui.QCursor( QtCore.Qt.SizeAllCursor )
-        self.cursor = QtGui.QCursor( QtGui.QPixmap( './images/pan_cursor.png' ) )
+        self.cursor = QtGui.QCursor( QtGui.QPixmap( './resources/pan_cursor.png' ) )
             
     def activate(self):
         super(PanTool,self).activate()        
@@ -88,7 +88,7 @@ class OrbitTool(ViewTool):
     def __init__(self,parent):
         super(OrbitTool,self).__init__( 'ORBIT', parent )
         self.key = QtCore.Qt.Key_O
-        self.cursor = QtGui.QCursor( QtGui.QPixmap( './images/orbit_cursor.png' ) )
+        self.cursor = QtGui.QCursor( QtGui.QPixmap( './resources/orbit_cursor.png' ) )
         
     def activate(self):
         super(OrbitTool,self).activate()
@@ -117,7 +117,7 @@ class ZoomTool(ViewTool):
     def __init__(self,parent):
         super(ZoomTool,self).__init__( 'ZOOM', parent )
         self.key = QtCore.Qt.Key_Z
-        self.cursor = QtGui.QCursor( QtGui.QPixmap( './images/zoom_cursor.png' ) )
+        self.cursor = QtGui.QCursor( QtGui.QPixmap( './resources/zoom_cursor.png' ) )
 
     def activate(self):
         super(ZoomTool,self).activate()

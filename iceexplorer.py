@@ -35,7 +35,7 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         self.setStyleSheet(CONSTS.SS_BACKGROUND)
 
         self.setWindowTitle("ICE Explorer")
-        self.setWindowIcon( QtGui.QIcon('./images/icex.png') )
+        self.setWindowIcon( QtGui.QIcon('./resources/icex.png') )
 
         self.viewer = ICEViewer(self)
         self.viewer.cacheLoaded.connect(self.on_cache_loaded)
@@ -110,25 +110,25 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         pass
         
     def create_actions(self):
-        self.load_cache_folder_act = QtGui.QAction(QtGui.QIcon(r'./images/load-cache-folder.png'), "&Load Cache Folder...", self, statusTip="Load Cache Folder", triggered=self.load_cache_folder)
-        self.load_cache_act = QtGui.QAction(QtGui.QIcon(r'./images/load-cache-file.png'), "Load Cache &File...", self, statusTip="Load Cache File", triggered=self.load_cache)
-        self.load_cache_data_act = QtGui.QAction(QtGui.QIcon(r'./images/display-data.png'), "&Display Data", self, statusTip="Display Data", triggered=self.load_cache_data)
-        self.export_cache_act = QtGui.QAction(QtGui.QIcon(r'./images/export-cache.png'), "Export &Cache File...", self, statusTip="Export Cache", triggered=self.export_cache)
-        self.export_selected_cache_act = QtGui.QAction(QtGui.QIcon(r'./images/export-cache.png'), "Export &Cache File", self, statusTip="Export Cache")
-        self.export_cache_folder_act = QtGui.QAction(QtGui.QIcon(r'./images/export-cache-folder.png'), "Export &Cache Folder...", self, statusTip="Export Cache Folder", triggered=self.export_cache_folder)
+        self.load_cache_folder_act = QtGui.QAction(QtGui.QIcon(r'./resources/load-cache-folder.png'), "&Load Cache Folder...", self, statusTip="Load Cache Folder", triggered=self.load_cache_folder)
+        self.load_cache_act = QtGui.QAction(QtGui.QIcon(r'./resources/load-cache-file.png'), "Load Cache &File...", self, statusTip="Load Cache File", triggered=self.load_cache)
+        self.load_cache_data_act = QtGui.QAction(QtGui.QIcon(r'./resources/display-data.png'), "&Display Data", self, statusTip="Display Data", triggered=self.load_cache_data)
+        self.export_cache_act = QtGui.QAction(QtGui.QIcon(r'./resources/export-cache.png'), "Export &Cache File...", self, statusTip="Export Cache", triggered=self.export_cache)
+        self.export_selected_cache_act = QtGui.QAction(QtGui.QIcon(r'./resources/export-cache.png'), "Export &Cache File", self, statusTip="Export Cache")
+        self.export_cache_folder_act = QtGui.QAction(QtGui.QIcon(r'./resources/export-cache-folder.png'), "Export &Cache Folder...", self, statusTip="Export Cache Folder", triggered=self.export_cache_folder)
 
-        self.prefs_act = QtGui.QAction(QtGui.QIcon(r'./images/preferences.png'), "&Preferences...", self, statusTip="ICE Explorer Preferences", triggered=self.preferences)
+        self.prefs_act = QtGui.QAction(QtGui.QIcon(r'./resources/preferences.png'), "&Preferences...", self, statusTip="ICE Explorer Preferences", triggered=self.preferences)
         self.quit_act = QtGui.QAction("&Quit", self, shortcut="Ctrl+Q", statusTip="Quit ICE Explorer", triggered=self.close)
         self.about_act = QtGui.QAction("&About", self, statusTip="Show About Dialog", triggered=self.about)
 
-        self.show_pers_act = QtGui.QAction(QtGui.QIcon(r'./images/perspective.png'),"&Perspective", self, statusTip="Show Perspective View", triggered=self.viewer.perspective_view)
-        self.show_top_act = QtGui.QAction(QtGui.QIcon(r'./images/top.png'),"&Top", self, statusTip="Show Top View", triggered=self.viewer.top_view)
-        self.show_front_act = QtGui.QAction(QtGui.QIcon(r'./images/front.png'),"&Front", self, statusTip="Show Front View", triggered=self.viewer.front_view)
-        self.show_right_act = QtGui.QAction(QtGui.QIcon(r'./images/right.png'),"&Right", self, statusTip="Show Right View", triggered=self.viewer.right_view)
+        self.show_pers_act = QtGui.QAction(QtGui.QIcon(r'./resources/perspective.png'),"&Perspective", self, statusTip="Show Perspective View", triggered=self.viewer.perspective_view)
+        self.show_top_act = QtGui.QAction(QtGui.QIcon(r'./resources/top.png'),"&Top", self, statusTip="Show Top View", triggered=self.viewer.top_view)
+        self.show_front_act = QtGui.QAction(QtGui.QIcon(r'./resources/front.png'),"&Front", self, statusTip="Show Front View", triggered=self.viewer.front_view)
+        self.show_right_act = QtGui.QAction(QtGui.QIcon(r'./resources/right.png'),"&Right", self, statusTip="Show Right View", triggered=self.viewer.right_view)
 
-        self.zoom_tool_act = QtGui.QAction(QtGui.QIcon(r'./images/zoom.png'), "&Zoom", self, statusTip="Zoom Tool", triggered=self.viewer.zoom_tool)
-        self.orbit_tool_act = QtGui.QAction(QtGui.QIcon(r'./images/orbit.png'), "&Orbit", self, statusTip="Orbit Tool", triggered=self.viewer.orbit_tool)
-        self.pan_tool_act = QtGui.QAction(QtGui.QIcon(r'./images/pan.png'), "&Pan", self, statusTip="Pan Tool", triggered=self.viewer.pan_tool)
+        self.zoom_tool_act = QtGui.QAction(QtGui.QIcon(r'./resources/zoom.png'), "&Zoom", self, statusTip="Zoom Tool", triggered=self.viewer.zoom_tool)
+        self.orbit_tool_act = QtGui.QAction(QtGui.QIcon(r'./resources/orbit.png'), "&Orbit", self, statusTip="Orbit Tool", triggered=self.viewer.orbit_tool)
+        self.pan_tool_act = QtGui.QAction(QtGui.QIcon(r'./resources/pan.png'), "&Pan", self, statusTip="Pan Tool", triggered=self.viewer.pan_tool)
 
     def create_menus(self):    
         self.menuBar().setStyleSheet( CONSTS.SS_MENUBAR )

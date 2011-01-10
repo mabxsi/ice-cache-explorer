@@ -21,7 +21,7 @@ import os
 import gzip
 import struct
 import re
-from icereader_util import constants
+from consts import CONSTS
 from icereader_util import dataAccessorPool
 from icereader_util import log_error
 from cStringIO import StringIO 
@@ -103,13 +103,14 @@ class ICEReader(object):
     def __del__(self):
         self.close()
 
-    def file(self):
-        return self._file
+    def filename(self):
+        return self._filename
         
     def load_data(self, attributes_to_load=() ):
         self.__read_header__()
         self.__read_attributes_desc__()
         self.__read_attributes_data__( attributes_to_load )
+        self.file.flush()
 
     def header(self):
         return self._header
@@ -119,13 +120,9 @@ class ICEReader(object):
 
     def log_info(self, destination_folder ):
 
-        # build log file path
-        print destination_folder
-        
-        filepath = os.path.join(destination_folder, self._filename.split('\\')[-1] ) + '.txt'
-        
-        print filepath 
-        
+        # build log file path        
+        filepath = os.path.join(destination_folder, os.path.basename(self._filename)  ) + '.txt'
+                
         f = open( filepath, 'w' )        
         f.write( str(self._header) )
         f.write( '\n' )
@@ -193,7 +190,7 @@ class ICEReader(object):
             attrib.name = self.__read_string__()
             attrib.datatype = self.__read_int__()
             
-            if attrib.datatype == constants.siICENodeDataCustomType and self._header.version > constants.siICECacheV1_1:
+            if attrib.datatype == CONSTS.siICENodeDataCustomType and self._header.version > CONSTS.siICECacheV1_1:
                 attrib.blobtype_count = self.__read_int__()
                 
                 for i in range( attrib.blobtype_count ):
@@ -204,7 +201,7 @@ class ICEReader(object):
             attrib.objid = self.__read_int__()
             attrib.category = self.__read_int__()
 
-            if attrib.datatype == constants.siICENodeDataLocation:
+            if attrib.datatype == CONSTS.siICENodeDataLocation:
                 attrib.ptlocator_size = self.__read_int__()
 
             #_debug( attrib )
@@ -242,21 +239,21 @@ class ICEReader(object):
             else:
                 # get number of elements to read based on the attribute context
                 elemCount = 0
-                if attrib.contexttype == constants.siICENodeContextSingleton:
+                if attrib.contexttype == CONSTS.siICENodeContextSingleton:
                     elemCount = 1
-                elif attrib.contexttype == constants.siICENodeContextComponent0D:
+                elif attrib.contexttype == CONSTS.siICENodeContextComponent0D:
                     elemCount = self._header.particle_count
-                elif attrib.contexttype == constants.siICENodeContextComponent1D:
+                elif attrib.contexttype == CONSTS.siICENodeContextComponent1D:
                     elemCount = self._header.edge_count
-                elif attrib.contexttype == constants.siICENodeContextComponent2D:
+                elif attrib.contexttype == CONSTS.siICENodeContextComponent2D:
                     elemCount = self._header.polygon_count
-                elif attrib.contexttype == constants.siICENodeContextComponent0D2D:
+                elif attrib.contexttype == CONSTS.siICENodeContextComponent0D2D:
                     elemCount = self._header.sample_count
                 else:
                     # no element set 
                     continue
                 
-                if attrib.datatype == constants.siICENodeDataLocation:
+                if attrib.datatype == CONSTS.siICENodeDataLocation:
                     # just skip point locators
                     size = self.__read_int__()
                     self.file.read( size )
@@ -328,30 +325,34 @@ class ICEReader(object):
                 
                 # load entire block in memory
                 buffer = StringIO(self.file.read( self._header.particle_count*accessor.size() ))
-                                
+                self.file.flush()
                 for index in xrange( self._header.particle_count ):
-                    data[index] = accessor.read( buffer )
+                    try:
+                        data[index] = accessor.read( buffer )
+                    except:
+                        log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
+                        
                 buffer.close()
                 
                 self._data[ attrib.name ] = data
             else:
                 # get number of elements to read based on the attribute context
                 elemCount = 0
-                if attrib.contexttype == constants.siICENodeContextSingleton:
+                if attrib.contexttype == CONSTS.siICENodeContextSingleton:
                     elemCount = 1
-                elif attrib.contexttype == constants.siICENodeContextComponent0D:
+                elif attrib.contexttype == CONSTS.siICENodeContextComponent0D:
                     elemCount = self._header.particle_count
-                elif attrib.contexttype == constants.siICENodeContextComponent1D:
+                elif attrib.contexttype == CONSTS.siICENodeContextComponent1D:
                     elemCount = self._header.edge_count
-                elif attrib.contexttype == constants.siICENodeContextComponent2D:
+                elif attrib.contexttype == CONSTS.siICENodeContextComponent2D:
                     elemCount = self._header.polygon_count
-                elif attrib.contexttype == constants.siICENodeContextComponent0D2D:
+                elif attrib.contexttype == CONSTS.siICENodeContextComponent0D2D:
                     elemCount = self._header.sample_count
                 else:
                     # no element set 
                     continue
                 
-                if attrib.datatype == constants.siICENodeDataLocation:
+                if attrib.datatype == CONSTS.siICENodeDataLocation:
                     # just skip point locators
                     size = self.__read_int__()
                     self.file.read( size )
@@ -377,7 +378,9 @@ class ICEReader(object):
                         if toKeep:
                             # append the whole chunk to array 
                             buffer = StringIO(self.file.read( accessor.size() ))                            
+                            self.file.flush()
                             constVal = accessor.read( buffer )
+                            
                             for i in chunk:         
                                 data[index] = constVal
                                 index +=1                                
@@ -385,14 +388,16 @@ class ICEReader(object):
                         else:
                             try:
                                 # note: seek forward seems buggy, use read instead
-                                self.file.read( len(chunk)*accessor.size() )                            
+                                self.file.read( len(chunk)*accessor.size() )          
+                                self.file.flush()
                             except:
                                 log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
                     else: 
                         # non-constant values
                         if toKeep:
                             #load chunk and assing all values to array
-                            buffer = StringIO(self.file.read( len(chunk)*accessor.size() ))                        
+                            buffer = StringIO(self.file.read( len(chunk)*accessor.size() ))
+                            self.file.flush()                            
                             for i in chunk:         
                                 data[index] = accessor.read( buffer )
                                 index +=1
@@ -400,10 +405,10 @@ class ICEReader(object):
                         else:
                             try:
                                 # note: seek forward seems buggy, use read instead
-                                self.file.read( len(chunk)*accessor.size() )                            
+                                self.file.read( len(chunk)*accessor.size() )     
+                                self.file.flush()
                             except:
                                 log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
-
             
     def __chunks__( self, elemCount ):
         """ 
@@ -484,7 +489,7 @@ def get_files_from_cache_folder( dir ):
     return (files,start,end)
 
 def test():
-    r = ICEReader( r'C:\dev\icecache_data\TEST\38.icecache' )
+    r = ICEReader( r'C:\dev\icecache_data\TEST\478.icecache' )
     #print r.file.read()
 
     import time
@@ -493,7 +498,7 @@ def test():
     r.load_data( () )
     print 'array count %d' % len(r._data)
     print 'elapsed time (ms) = %f' % (time.clock()-t)
-    r.log_info()
+    r.log_info( r'c:\temp' )
 
 def main():
     # load points only

@@ -16,9 +16,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ###############################################################################
 
-from PyQt4 import QtCore
+import sys
+from PyQt4 import QtCore, QtGui
 from OpenGL.GL import *
 from basics import Vec3
+from icereader_util import log_error
 
 class ViewTool(object):    
     def __init__(self, name, parent):
@@ -28,10 +30,10 @@ class ViewTool(object):
         self.key = -1
 
     def activate(self):
-        active = True
+        self.active = True
 
     def deactivate(self):
-        active = False        
+        self.active = False        
 
     def move(self, mouse_button, deltaX, deltaY ):
         return False
@@ -53,9 +55,13 @@ class PanTool(ViewTool):
         super(PanTool,self).__init__( 'PAN', parent )
         self.panning_vec = Vec3()
         self.key = QtCore.Qt.Key_P
+        #self.cursor = QtGui.QCursor( QtCore.Qt.SizeAllCursor )
+        self.cursor = QtGui.QCursor( QtGui.QPixmap( './images/pan_cursor.png' ) )
             
     def activate(self):
-        super(PanTool,self).activate()
+        super(PanTool,self).activate()        
+        self.parent.setCursor( self.cursor )
+        self.parent.repaint(True)        
         self.parent.statusbar.showMessage("PAN: Left Mouse Button, ZOOM: Right Mouse Button")            
 
     def move(self, mouse_button, deltaX, deltaY ):
@@ -82,9 +88,12 @@ class OrbitTool(ViewTool):
     def __init__(self,parent):
         super(OrbitTool,self).__init__( 'ORBIT', parent )
         self.key = QtCore.Qt.Key_O
-    
+        self.cursor = QtGui.QCursor( QtGui.QPixmap( './images/orbit_cursor.png' ) )
+        
     def activate(self):
-        super(PanTool,self).activate()
+        super(OrbitTool,self).activate()
+        self.parent.setCursor( self.cursor )
+        self.parent.repaint(True)                
         self.parent.statusbar.showMessage("ORBIT: Left Mouse Button, ZOOM: Right Mouse Button")            
 
     def move(self, mouse_button, deltaX, deltaY ):
@@ -108,9 +117,12 @@ class ZoomTool(ViewTool):
     def __init__(self,parent):
         super(ZoomTool,self).__init__( 'ZOOM', parent )
         self.key = QtCore.Qt.Key_Z
+        self.cursor = QtGui.QCursor( QtGui.QPixmap( './images/zoom_cursor.png' ) )
 
     def activate(self):
-        super(PanTool,self).activate()
+        super(ZoomTool,self).activate()
+        self.parent.setCursor( self.cursor )
+        self.parent.repaint(True)                        
         self.parent.statusbar.showMessage("ZOOM: Left/Right Mouse Button")            
 
     def move(self, mouse_button, deltaX, deltaY ):
@@ -132,6 +144,8 @@ class ToolManager(object):
         
         self.tools_from_name = {}
         self.tools_from_key = {}
+        
+        self.old_cursor = parent.cursor()
         
         tool = PanTool( parent )        
         self.tools_from_name[ tool.name ] = tool
@@ -173,14 +187,26 @@ class ToolManager(object):
         return False
 
     def keyPressEvent( self, event ):
-        try:
-            self.active_tool = self.tools_from_key[ event.key() ]      
-            self.active_tool.activate()                                
+        try:            
+            self.activate_tool( self.tools_from_key[ event.key() ] )
             return True
         except:
             pass
         return False
 
+    def activate_tool( self, tool ):
+        # deactivate current 
+        try:
+            tool.deactivate()
+            tool.parent.setCursor( self.old_cursor )
+        except:
+            log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
+
+        #activate new tool
+        self.active_tool = tool
+        self.old_cursor = tool.parent.cursor()
+        tool.activate()
+            
     def __getitem__( self, name ):
         return self.tools_from_name[ name ]
        

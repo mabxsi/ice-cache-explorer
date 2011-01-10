@@ -21,52 +21,7 @@ import os
 import gzip
 import struct
 import numpy as np
-
-class constants:    
-    siICENodeContextAny           =0x3f                 # from enum siICENodeContextType
-    siICENodeContextComponent0D   =0x2                  # from enum siICENodeContextType
-    siICENodeContextComponent0D2D =0x10                 # from enum siICENodeContextType
-    siICENodeContextComponent0DOr1DOr2D=0xe             # from enum siICENodeContextType
-    siICENodeContextComponent1D   =0x4                  # from enum siICENodeContextType
-    siICENodeContextComponent2D   =0x8                  # from enum siICENodeContextType
-    siICENodeContextElementGenerator=0x20               # from enum siICENodeContextType
-    siICENodeContextNotSingleton  =0x3e                 # from enum siICENodeContextType
-    siICENodeContextSingleton     =0x1                  # from enum siICENodeContextType
-    siICENodeContextSingletonOrComponent0D=0x3          # from enum siICENodeContextType
-    siICENodeContextSingletonOrComponent0D2D=0x11       # from enum siICENodeContextType
-    siICENodeContextSingletonOrComponent1D=0x5          # from enum siICENodeContextType
-    siICENodeContextSingletonOrComponent2D=0x9          # from enum siICENodeContextType
-    siICENodeContextSingletonOrElementGenerator=0x21    # from enum siICENodeContextType
-    siICENodeDataAny              =0x7ffff    # from enum siICENodeDataType
-    siICENodeDataArithmeticSupport=0x41fe     # from enum siICENodeDataType
-    siICENodeDataBool             =0x1        # from enum siICENodeDataType
-    siICENodeDataColor4           =0x200      # from enum siICENodeDataType
-    siICENodeDataCustomType       =0x10000    # from enum siICENodeDataType
-    siICENodeDataExecute          =0x1000     # from enum siICENodeDataType
-    siICENodeDataFloat            =0x4        # from enum siICENodeDataType
-    siICENodeDataGeometry         =0x400      # from enum siICENodeDataType
-    siICENodeDataIcon             =0x40000    # from enum siICENodeDataType
-    siICENodeDataInterface        =0x400      # from enum siICENodeDataType
-    siICENodeDataLocation         =0x800      # from enum siICENodeDataType
-    siICENodeDataLong             =0x2        # from enum siICENodeDataType
-    siICENodeDataMatrix33         =0x80       # from enum siICENodeDataType
-    siICENodeDataMatrix44         =0x100      # from enum siICENodeDataType
-    siICENodeDataMultiComp        =0x43f8     # from enum siICENodeDataType
-    siICENodeDataQuaternion       =0x40       # from enum siICENodeDataType
-    siICENodeDataReference        =0x2000     # from enum siICENodeDataType
-    siICENodeDataRotation         =0x4000     # from enum siICENodeDataType
-    siICENodeDataShape            =0x8000     # from enum siICENodeDataType
-    siICENodeDataString           =0x20000    # from enum siICENodeDataType
-    siICENodeDataValue            =0x7c3ff    # from enum siICENodeDataType
-    siICENodeDataVector2          =0x8        # from enum siICENodeDataType
-    siICENodeDataVector3          =0x10       # from enum siICENodeDataType
-    siICENodeDataVector4          =0x20       # from enum siICENodeDataType
-    siICENodeStructureAny=0x3
-    siICENodeStructureArray =0x2      # from enum siICENodeStructureType
-    siICENodeStructureSingle =0x1      # from enum siICENodeStructureType
-    siICECacheV1      = 100
-    siICECacheV1_1    = 101
-    siICECacheV1_2    = 102
+from consts import CONSTS
 
 def log_error( f0, f1, sysexc ):
     print 'ERROR:\n   Function: %s (%s)\n   Caller: %s (%s at line %d):\n   EXCEPTION: %s : %s' % (f0.f_code.co_name,f0.f_code.co_filename,f1.f_code.co_name,f1.f_code.co_filename,f1.f_lineno,sysexc[0],sysexc[1])
@@ -424,36 +379,36 @@ class DataAccessorMatrix44(DataAccessor):
 
 
 dataAccessorMap = { 
-    constants.siICENodeDataBool           : DataAccessorBool(), 
-    constants.siICENodeDataColor4         : DataAccessorColor4(), 
-    constants.siICENodeDataCustomType     : DataAccessorCustomType(), 
-    constants.siICENodeDataFloat          : DataAccessorFloat(), 
-    constants.siICENodeDataLong           : DataAccessorLong(), 
-    constants.siICENodeDataMatrix33       : DataAccessorMatrix33(), 
-    constants.siICENodeDataMatrix44       : DataAccessorMatrix44(), 
-    constants.siICENodeDataQuaternion     : DataAccessorQuaternion(), 
-    constants.siICENodeDataRotation       : DataAccessorRotation(), 
-    constants.siICENodeDataString         : DataAccessorString(), 
-    constants.siICENodeDataVector2        : DataAccessorVector2(), 
-    constants.siICENodeDataVector3        : DataAccessorVector3(), 
-    constants.siICENodeDataVector4        : DataAccessorVector4()
+    CONSTS.siICENodeDataBool           : DataAccessorBool(), 
+    CONSTS.siICENodeDataColor4         : DataAccessorColor4(), 
+    CONSTS.siICENodeDataCustomType     : DataAccessorCustomType(), 
+    CONSTS.siICENodeDataFloat          : DataAccessorFloat(), 
+    CONSTS.siICENodeDataLong           : DataAccessorLong(), 
+    CONSTS.siICENodeDataMatrix33       : DataAccessorMatrix33(), 
+    CONSTS.siICENodeDataMatrix44       : DataAccessorMatrix44(), 
+    CONSTS.siICENodeDataQuaternion     : DataAccessorQuaternion(), 
+    CONSTS.siICENodeDataRotation       : DataAccessorRotation(), 
+    CONSTS.siICENodeDataString         : DataAccessorString(), 
+    CONSTS.siICENodeDataVector2        : DataAccessorVector2(), 
+    CONSTS.siICENodeDataVector3        : DataAccessorVector3(), 
+    CONSTS.siICENodeDataVector4        : DataAccessorVector4()
 }
 
 """
 dataAccessor2DMap = { 
-    constants.siICENodeDataBool           : DataAccessor2DBool(), 
-    constants.siICENodeDataColor4         : DataAccessor2DColor4(), 
-    constants.siICENodeDataCustomType     : DataAccessor2DCustomType(), 
-    constants.siICENodeDataFloat          : DataAccessor2DFloat(), 
-    constants.siICENodeDataLong           : DataAccessor2DLong(), 
-    constants.siICENodeDataMatrix33       : DataAccessor2DMatrix33(), 
-    constants.siICENodeDataMatrix44       : DataAccessor2DMatrix44(), 
-    constants.siICENodeDataQuaternion     : DataAccessor2DQuaternion(), 
-    constants.siICENodeDataRotation       : DataAccessor2DRotation(), 
-    constants.siICENodeDataString         : DataAccessor2DString(), 
-    constants.siICENodeDataVector2        : DataAccessor2DVector2(), 
-    constants.siICENodeDataVector3        : DataAccessor2DVector3(), 
-    constants.siICENodeDataVector4        : DataAccessor2DVector4() 
+    CONSTS.siICENodeDataBool           : DataAccessor2DBool(), 
+    CONSTS.siICENodeDataColor4         : DataAccessor2DColor4(), 
+    CONSTS.siICENodeDataCustomType     : DataAccessor2DCustomType(), 
+    CONSTS.siICENodeDataFloat          : DataAccessor2DFloat(), 
+    CONSTS.siICENodeDataLong           : DataAccessor2DLong(), 
+    CONSTS.siICENodeDataMatrix33       : DataAccessor2DMatrix33(), 
+    CONSTS.siICENodeDataMatrix44       : DataAccessor2DMatrix44(), 
+    CONSTS.siICENodeDataQuaternion     : DataAccessor2DQuaternion(), 
+    CONSTS.siICENodeDataRotation       : DataAccessor2DRotation(), 
+    CONSTS.siICENodeDataString         : DataAccessor2DString(), 
+    CONSTS.siICENodeDataVector2        : DataAccessor2DVector2(), 
+    CONSTS.siICENodeDataVector3        : DataAccessor2DVector3(), 
+    CONSTS.siICENodeDataVector4        : DataAccessor2DVector4() 
 }
 """
 dataAccessor2DMap = {0:None}
@@ -463,9 +418,9 @@ class DataAccessorPool(object):
         pass
     
     def accessor( self, datatype, structtype ):
-        if structtype == constants.siICENodeStructureSingle:
+        if structtype == CONSTS.siICENodeStructureSingle:
             return dataAccessorMap[ datatype ]
-        elif structtype == constants.siICENodeStructureArray:
+        elif structtype == CONSTS.siICENodeStructureArray:
             return dataAccessor2DMap[ datatype ]
         return None
 
@@ -473,12 +428,12 @@ dataAccessorPool = DataAccessorPool()
 
 if __name__ == '__main__':
 
-    quat = dataAccessorPool.accessor(constants.siICENodeDataQuaternion, constants.siICENodeStructureSingle )
+    quat = dataAccessorPool.accessor(CONSTS.siICENodeDataQuaternion, CONSTS.siICENodeStructureSingle )
     print dir(quat)
     s = quat.format( [[1,2,3,4]] )
     print s
     
-    color4 = dataAccessorPool.accessor(constants.siICENodeDataColor4, constants.siICENodeStructureSingle )
+    color4 = dataAccessorPool.accessor(CONSTS.siICENodeDataColor4, CONSTS.siICENodeStructureSingle )
     print dir(color4)
     s = color4.format( [[1,2,3,4]] )
     print s

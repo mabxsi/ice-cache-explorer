@@ -16,28 +16,35 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ###############################################################################
 
-# This is only needed for Python v2 but is harmless for Python v3.
-#import sip
-#sip.setapi('QString', 2)
+import sip
+sip.setapi('QString', 2)
 
 from PyQt4 import QtCore, QtGui
 
 from iceviewer import ICEViewer
 from icereader import get_files_from_cache_folder
 from iceexporter import ICEExporter
+from icedataloader import ICEDataLoader
 from playback import PlaybackWidget
+from consts import CONSTS
 
 class ICECacheExplorerWindow(QtGui.QMainWindow):
     def __init__(self):
         super(ICECacheExplorerWindow, self).__init__()
 
-        self.setWindowTitle("ICE Cache Explorer")
+        self.setStyleSheet(CONSTS.SS_BACKGROUND)
+
+        self.setWindowTitle("ICE Explorer")
+        self.setWindowIcon( QtGui.QIcon('./images/icex.png') )
 
         self.viewer = ICEViewer(self)
         self.viewer.cacheLoaded.connect(self.on_cache_loaded)
         self.setCentralWidget(self.viewer)
 
         self.exporter_thread = ICEExporter(self)
+        self.data_loader_thread = ICEDataLoader(self)
+        self.data_loader_thread.beginCacheDataLoading.connect( self.on_begin_cache_data_loading )
+        self.data_loader_thread.endCacheDataLoading.connect( self.on_end_cache_data_loading )
         
         self.create_actions()
         self.create_menus()
@@ -58,55 +65,32 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         if not fname:
             return
 
-        self.statusBar().showMessage( 'Loading "%s"' % fname, 2000)
+        self.statusBar().showMessage( 'Loading "%s" ...' % fname, 2000)
         
         self.treeWidget.clear()
         self.viewer.load_file( fname )
 
     def load_cache_data(self):
-        item = self.treeWidget.currentItem() 
-        
-        if item.parent() == None:
-            # top level item: load all attribute data            
-            cacheindex = int( item.text(0).split(' ')[1] )
-            for i in range(item.childCount()):
-                attribitem = item.child(i)
-                if attribitem.text(0) == 'Attribute':
-                    self.load_attribute_data( attribitem, cacheindex )
-            
-        elif item.text(0) == 'Attribute':
-            # load this attribute data
-            cacheitem = item.parent()
-            cacheindex = int( cacheitem.text(0).split(' ')[1] )
-            self.load_attribute_data( item, cacheindex )
+        # start worker thread to load the attribute(s) data
+        self.data_loader_thread.load( self.treeWidget, self.viewer )
 
-    def load_attribute_data( self, item, cacheindex ):
-            values = []
-            try:
-                values = self.viewer.get_data( item.text(1), cacheindex )
-            except:
-                pass
+    def on_begin_cache_data_loading(self, cache_name, cache_attrib):
+        self.statusBar().showMessage( 'Loading "%s - %s" data ...' % (cache_name, cache_attrib) )
 
-            nCount = item.childCount()
-            dataitem = item.child( nCount -1 )
-            for i,val in enumerate(values):
-                value = QtGui.QTreeWidgetItem( dataitem )
-                value.setText( 0, str(i) )
-                value.setText( 1, str(val) )        
+    def on_end_cache_data_loading(self, cache_name, cache_attrib):
+        # and we are done
+        self.statusBar().clearMessage()        
 
     def about(self):
-        QtGui.QMessageBox.about(self, "About ICE Cache Explorer",
-                "<b>ICE Cache Explorer</b> Copyright (C) 2010  M.A.Belzile <br>"
+        QtGui.QMessageBox.about(self, "About ICE Explorer",
+                "<b>ICE Explorer</b> Copyright (C) 2010  M.A.Belzile <br>"
                 "A tool for viewing and browsing ICE cache data.<br><br>"
                 "This program comes with ABSOLUTELY NO WARRANTY; for details see the GNU General Public License. "
                 "This is free software, and you are welcome to redistribute it under certain conditions; see the GNU General Public License for details.")
 
     def close( self ):
         sys.exit()
-
-    def export_selected_cache( self ):
-        pass
-
+        
     def export_cache_folder( self ):
         """ Convert all cache files from dir to ascii """
         folder =QtGui.QFileDialog.getExistingDirectory(self, "Select ICECache Folder", ".", QtGui.QFileDialog.ShowDirsOnly)
@@ -122,30 +106,36 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
 
         self.exporter_thread.export_file( fname, r'c:\temp', ('Color___', 'Size___' ) )
 
-    def options( self ):
+    def preferences( self ):
         pass
         
     def create_actions(self):
-        self.load_cache_folder_act = QtGui.QAction(QtGui.QIcon('./images/save.png'), "&Load Cache Folder...", self, statusTip="Load Cache Folder", triggered=self.load_cache_folder)
-        self.load_cache_act = QtGui.QAction(QtGui.QIcon('./images/save.png'), "Load Cache &File...", self, statusTip="Load Cache File", triggered=self.load_cache)
-        self.load_cache_data_act = QtGui.QAction(QtGui.QIcon('./images/save.png'), "&Display Data", self, statusTip="Display Data", triggered=self.load_cache_data)
-        self.export_cache_act = QtGui.QAction(QtGui.QIcon('./images/save.png'), "Export &Cache File...", self, statusTip="Export Cache", triggered=self.export_cache)
-        self.export_selected_cache_act = QtGui.QAction(QtGui.QIcon('./images/save.png'), "Export Selected &Cache File", self, statusTip="Export Selected Cache", triggered=self.export_selected_cache)
-        self.export_cache_folder_act = QtGui.QAction(QtGui.QIcon('./images/save.png'), "Export &Cache Folder...", self, statusTip="Export Cache Folder", triggered=self.export_cache_folder)
+        self.load_cache_folder_act = QtGui.QAction(QtGui.QIcon(r'./images/load-cache-folder.png'), "&Load Cache Folder...", self, statusTip="Load Cache Folder", triggered=self.load_cache_folder)
+        self.load_cache_act = QtGui.QAction(QtGui.QIcon(r'./images/load-cache-file.png'), "Load Cache &File...", self, statusTip="Load Cache File", triggered=self.load_cache)
+        self.load_cache_data_act = QtGui.QAction(QtGui.QIcon(r'./images/display-data.png'), "&Display Data", self, statusTip="Display Data", triggered=self.load_cache_data)
+        self.export_cache_act = QtGui.QAction(QtGui.QIcon(r'./images/export-cache.png'), "Export &Cache File...", self, statusTip="Export Cache", triggered=self.export_cache)
+        self.export_selected_cache_act = QtGui.QAction(QtGui.QIcon(r'./images/export-cache.png'), "Export &Cache File", self, statusTip="Export Cache")
+        self.export_cache_folder_act = QtGui.QAction(QtGui.QIcon(r'./images/export-cache-folder.png'), "Export &Cache Folder...", self, statusTip="Export Cache Folder", triggered=self.export_cache_folder)
 
+        self.prefs_act = QtGui.QAction(QtGui.QIcon(r'./images/preferences.png'), "&Preferences...", self, statusTip="ICE Explorer Preferences", triggered=self.preferences)
         self.quit_act = QtGui.QAction("&Quit", self, shortcut="Ctrl+Q", statusTip="Quit ICE Explorer", triggered=self.close)
         self.about_act = QtGui.QAction("&About", self, statusTip="Show About Dialog", triggered=self.about)
 
-        self.options_act = QtGui.QAction("&Options", self, statusTip="Show Option Dialog", triggered=self.options)
+        self.show_pers_act = QtGui.QAction(QtGui.QIcon(r'./images/perspective.png'),"&Perspective", self, statusTip="Show Perspective View", triggered=self.viewer.perspective_view)
+        self.show_top_act = QtGui.QAction(QtGui.QIcon(r'./images/top.png'),"&Top", self, statusTip="Show Top View", triggered=self.viewer.top_view)
+        self.show_front_act = QtGui.QAction(QtGui.QIcon(r'./images/front.png'),"&Front", self, statusTip="Show Front View", triggered=self.viewer.front_view)
+        self.show_right_act = QtGui.QAction(QtGui.QIcon(r'./images/right.png'),"&Right", self, statusTip="Show Right View", triggered=self.viewer.right_view)
 
-        self.show_pers_act = QtGui.QAction("&Perspective", self, statusTip="Show Perspective View", triggered=self.viewer.perspective_view)
-        self.show_top_act = QtGui.QAction("&Top", self, statusTip="Show Top View", triggered=self.viewer.top_view)
-        self.show_front_act = QtGui.QAction("&Front", self, statusTip="Show Front View", triggered=self.viewer.front_view)
-        self.show_right_act = QtGui.QAction("&Right", self, statusTip="Show Right View", triggered=self.viewer.right_view)
-        self.show_left_act = QtGui.QAction("&Left", self, statusTip="Show Left View", triggered=self.viewer.left_view)
+        self.zoom_tool_act = QtGui.QAction(QtGui.QIcon(r'./images/zoom.png'), "&Zoom", self, statusTip="Zoom Tool", triggered=self.viewer.zoom_tool)
+        self.orbit_tool_act = QtGui.QAction(QtGui.QIcon(r'./images/orbit.png'), "&Orbit", self, statusTip="Orbit Tool", triggered=self.viewer.orbit_tool)
+        self.pan_tool_act = QtGui.QAction(QtGui.QIcon(r'./images/pan.png'), "&Pan", self, statusTip="Pan Tool", triggered=self.viewer.pan_tool)
 
-    def create_menus(self):
-        self.fileMenu = self.menuBar().addMenu("&File")
+    def create_menus(self):    
+        self.menuBar().setStyleSheet( CONSTS.SS_MENUBAR )
+        
+        self.fileMenu = self.menuBar().addMenu("&File")        
+        self.fileMenu.setStyleSheet( CONSTS.SS_MENU )
+ 
         self.fileMenu.addAction(self.load_cache_act)
         self.fileMenu.addAction(self.load_cache_folder_act)
         self.fileMenu.addSeparator()
@@ -155,27 +145,34 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         self.fileMenu.addAction(self.quit_act)
 
         self.editMenu = self.menuBar().addMenu("&Edit")
-        self.editMenu.addAction(self.options_act)
+        self.editMenu.setStyleSheet( CONSTS.SS_MENU )
+        self.editMenu.addAction(self.prefs_act)
         
         self.viewMenu = self.menuBar().addMenu("&View")
-        self.viewMenu.addAction(self.show_pers_act)
-        self.viewMenu.addAction(self.show_top_act)
-        self.viewMenu.addAction(self.show_front_act)
-        self.viewMenu.addAction(self.show_right_act)
-        self.viewMenu.addAction(self.show_left_act)
-
-        #self.menuBar().addSeparator()
+        self.viewMenu.setStyleSheet( CONSTS.SS_MENU )
 
         self.helpMenu = self.menuBar().addMenu("&Help")
         self.helpMenu.addAction(self.about_act)
+        self.helpMenu.setStyleSheet( CONSTS.SS_MENU )
 
     def create_toolbars(self):
-        self.viewToolBar = self.addToolBar("View")
+        self.fileToolBar = self.addToolBar("File")
+        self.fileToolBar.addAction(self.load_cache_folder_act)
+        self.fileToolBar.addAction(self.load_cache_act)
+        self.fileToolBar.addSeparator()
+        self.fileToolBar.addAction(self.export_cache_folder_act)
+        self.fileToolBar.addAction(self.export_cache_act)
+                
+        self.toolsToolBar = self.addToolBar("Tools")
+        self.toolsToolBar.addAction(self.orbit_tool_act)
+        self.toolsToolBar.addAction(self.pan_tool_act)
+        self.toolsToolBar.addAction(self.zoom_tool_act)
+        
+        self.viewToolBar = self.addToolBar("Views")
         self.viewToolBar.addAction(self.show_pers_act)
         self.viewToolBar.addAction(self.show_top_act)
         self.viewToolBar.addAction(self.show_front_act)
         self.viewToolBar.addAction(self.show_right_act)
-        self.viewToolBar.addAction(self.show_left_act)
 
     def create_statusbar(self):
         self.statusBar().showMessage("Ready")
@@ -192,12 +189,15 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         self.treeWidget.headerItem().setText( 1, 'Value' )
         self.treeWidget.setContextMenuPolicy( QtCore.Qt.CustomContextMenu )
         self.treeWidget.customContextMenuRequested.connect( self.handle_browser_contextmenu )
-
+        self.treeWidget.setStyleSheet( CONSTS.SS_BACKGROUND )
+        
         self.browser_contextmenu = QtGui.QMenu( self )
+        self.browser_contextmenu.setStyleSheet( CONSTS.SS_MENU )
         self.browser_contextmenu.addAction( self.load_cache_data_act )
-        self.browser_contextmenu.addAction( self.export_cache_act )
+        self.browser_contextmenu.addAction( self.export_selected_cache_act )
 
         self.attribute_contextmenu = QtGui.QMenu( self )
+        self.attribute_contextmenu.setStyleSheet( CONSTS.SS_MENU )
         self.attribute_contextmenu.addAction( self.load_cache_data_act )
 
         dock.setWidget(self.treeWidget)
@@ -208,9 +208,9 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         # playback widget
         dock = QtGui.QDockWidget("Play Back", self)
         dock.setAllowedAreas(QtCore.Qt.BottomDockWidgetArea)
-                
-        self.playback = PlaybackWidget( self.viewer, dock )
         
+        self.playback = PlaybackWidget( self.viewer, dock )
+                
         # connect playback signals to viewer slots
         self.playback.cacheChanged.connect(self.viewer.on_cache_change )        
         self.playback.startcacheChanged.connect(self.viewer.on_start_cache_change )
@@ -234,7 +234,11 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         if item.text(0) == 'Attribute':
             self.attribute_contextmenu.exec_( self.treeWidget.mapToGlobal(point) )
         else:
-            self.browser_contextmenu.exec_( self.treeWidget.mapToGlobal(point) )
+            action = self.browser_contextmenu.exec_( self.treeWidget.mapToGlobal(point) )
+            if action == self.export_selected_cache_act:
+                var = item.data(0,QtCore.Qt.UserRole)
+                filename = var.toString()
+                self.exporter_thread.export_file( filename, r'c:\temp', ('Color___', 'Size___' ) )                
 
     def on_cache_loaded( self, cache, reader ):
         """update the browser"""
@@ -242,6 +246,8 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         # cache item
         itemcache = QtGui.QTreeWidgetItem(self.treeWidget)
         itemcache.setText( 0, 'Cache %d' % (cache) )
+        fnameVar = QtCore.QVariant( reader.filename() )
+        itemcache.setData( 0, QtCore.Qt.UserRole, fnameVar )
         self.treeWidget.addTopLevelItem( itemcache )
         
         # header items
@@ -251,6 +257,7 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         headeritem = QtGui.QTreeWidgetItem( itemcache )        
         headeritem.setText( 0, 'Header' )
         headeritem.setText( 1, reader.header().name )
+        
         version = QtGui.QTreeWidgetItem( headeritem )
         type = QtGui.QTreeWidgetItem( headeritem )
         edge_count = QtGui.QTreeWidgetItem( headeritem )
@@ -335,11 +342,10 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
 if __name__ == '__main__':
 
     import sys
-    notice = """
-ICE Cache Explorer  Copyright (C) 2010  M.A.Belzile
-"""
+    notice = 'ICE Cache Explorer Copyright (C) 2010  M.A.Belzile'
     print notice
     app = QtGui.QApplication(sys.argv)
+    #app.setPalette( QtGui.QPalette( QtGui.QColor( 125, 125, 125) ) )
     mainWin = ICECacheExplorerWindow()
     mainWin.show()
     sys.exit(app.exec_())

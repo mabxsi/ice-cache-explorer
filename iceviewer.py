@@ -171,29 +171,26 @@ class ICEViewer(QtOpenGL.QGLWidget):
         self._updateGL()
         self.statusbar.showMessage("Left View")            
 
-    def orbit_tool(bActivate):
-        """ Activate/deactivate the orbit tool """
-        if bActivate:
-            self.toolmgr.active_tool = self.toolmgr[ 'ORBIT' ]
-        else:
-            self.toolmgr.active_tool = self.toolmgr[ 'NOTOOL' ]
-        self.toolmgr.active_tool.activate()                    
+    def orbit_tool(self):
+        """ Activate the orbit tool """
+        try:
+            self.toolmgr.activate_tool( self.toolmgr[ 'ORBIT' ] ) 
+        except:
+            print 'error activating orbit tool'
         
-    def pan_tool(bActivate):
-        """ Activate/deactivate the pan tool """
-        if bActivate:
-            self.toolmgr.active_tool = self.toolmgr[ 'PAN' ]
-        else:
-            self.toolmgr.active_tool = self.toolmgr[ 'NOTOOL' ]
-        self.toolmgr.active_tool.activate()
+    def pan_tool(self):
+        """ Activate the pan tool """
+        try:
+            self.toolmgr.activate_tool( self.toolmgr[ 'PAN' ] ) 
+        except:
+            print 'error activating pan tool'
 
-    def zoom_tool(bActivate):
-        """ Activate/deactivate the zoom tool """
-        if bActivate:
-            self.toolmgr.active_tool = self.toolmgr[ 'ZOOM' ]
-        else:
-            self.toolmgr.active_tool = self.toolmgr[ 'NOTOOL' ]
-        self.toolmgr.active_tool.activate()                    
+    def zoom_tool(self):
+        """ Activate the zoom tool """
+        try:
+            self.toolmgr.activate_tool( self.toolmgr[ 'ZOOM' ] ) 
+        except:
+            print 'error activating zoom tool'
 
     def __load_icecache_files__( self, files, startcache, endcache ):
         """ Load icecache files """
@@ -366,7 +363,7 @@ class ICEViewer(QtOpenGL.QGLWidget):
                     
     def initializeGL(self):
         """ Initialized the OGL view """
-        glClearColor(0.0, 0.0, 0.0, 0.0)
+        glClearColor(0.2, 0.2, 0.2, 0.0)
         glClearDepth(1.0)
         glDepthFunc(GL_LESS)
         glEnable(GL_DEPTH_TEST)
@@ -410,7 +407,7 @@ class ICEViewer(QtOpenGL.QGLWidget):
         glPushMatrix()
         glTranslate( 10, 0, 10 )
         glBegin(GL_LINES) 
-        glColor3f( 0.5, 0.5, 0.5 )
+        glColor3f( 1, 1, 1 )
         for i in range(21):
             glVertex3f(-20, 0, -20 + i)
             glVertex3f( 0, 0, -20 + i)
@@ -425,15 +422,15 @@ class ICEViewer(QtOpenGL.QGLWidget):
         glBegin(GL_LINES) 
         glColor3f( 1.0, 0.0, 0.0 )
         glVertex3f(0, 0, 0)
-        glVertex3f(.5, 0, 0)
+        glVertex3f(1, 0, 0)
 
         glColor3f( 0.0, 1.0, 0.0 )
         glVertex3f(0, 0, 0)
-        glVertex3f(0, .5, 0)
+        glVertex3f(0, 1, 0)
 
         glColor3f( 0.0, 0.0, 1.0 )
         glVertex3f(0, 0, 0)
-        glVertex3f(0, 0, .5)
+        glVertex3f(0, 0, 1)
         glEnd()
         glPopMatrix()
 

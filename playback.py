@@ -40,18 +40,18 @@ class PlaybackWidget( QtGui.QWidget ):
         self.start_cache = 1
         self.end_cache = 100
 
-        self.playtoggle = QtGui.QPushButton( QtGui.QIcon(r'./images/play.png'), '', self)
+        self.playtoggle = QtGui.QPushButton( QtGui.QIcon(r'./resources/play.png'), '', self)
         self.playtoggle.setFixedWidth(50)
         self.playtoggle.setCheckable( True )
-        self.stepforward = QtGui.QPushButton( QtGui.QIcon(r'./images/step-fwd.png'), '', self)
+        self.stepforward = QtGui.QPushButton( QtGui.QIcon(r'./resources/step-fwd.png'), '', self)
         self.stepforward.setFixedWidth(50)
-        self.stepbackward = QtGui.QPushButton( QtGui.QIcon(r'./images/step-back.png'), '', self)
+        self.stepbackward = QtGui.QPushButton( QtGui.QIcon(r'./resources/step-back.png'), '', self)
         self.stepbackward.setFixedWidth(50)
-        self.gotoend = QtGui.QPushButton(QtGui.QIcon(r'./images/goto-last.png'), '', self)
+        self.gotoend = QtGui.QPushButton(QtGui.QIcon(r'./resources/goto-last.png'), '', self)
         self.gotoend.setFixedWidth(50)
-        self.gotostart = QtGui.QPushButton(QtGui.QIcon(r'./images/goto-first.png'), '', self)
+        self.gotostart = QtGui.QPushButton(QtGui.QIcon(r'./resources/goto-first.png'), '', self)
         self.gotostart.setFixedWidth(50)
-        self.loop = QtGui.QPushButton(QtGui.QIcon(r'./images/loop.png'), '', self)
+        self.loop = QtGui.QPushButton(QtGui.QIcon(r'./resources/loop.png'), '', self)
         self.loop.setFixedWidth(50)
         self.loop.setCheckable( True )
         

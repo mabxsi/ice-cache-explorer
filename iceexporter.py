@@ -17,15 +17,16 @@
 ###############################################################################
 
 from PyQt4 import QtCore
-from icereader import ICEReader, get_files_from_cache_folder
+from icereader import ICEReader, get_files_from_cache_folder, get_files
 import re
 
 class ICEExporter(QtCore.QThread):
     """ Worker thread for exporting ICE cache data to ascii. """
-    # signal sent for each cache exported
-    # int: cache index
-    # object: reader
-    cacheExported = QtCore.pyqtSignal( int, object ) 
+    # string: export file name
+    cacheExporting = QtCore.pyqtSignal( str ) 
+    # int: number of files to export
+    beginCacheExporting = QtCore.pyqtSignal( int ) 
+    endCacheExporting = QtCore.pyqtSignal( ) 
 
     def __init__(self, parent = None):
         super(ICEExporter,self).__init__(parent)
@@ -38,8 +39,14 @@ class ICEExporter(QtCore.QThread):
         self.exiting = True
         self.wait()
 
+    def cancel(self):
+        self.exiting = True
+        self.wait()
+
     def export_folder( self, folder, destination, supported_attributes ):    
         """ start exporting cache files """
+        self.cancel()
+        self.exiting = False
         (self.files,self.startindex,end) = get_files_from_cache_folder( folder )
         self.destination_folder = destination
         self.supported_attributes = supported_attributes
@@ -47,11 +54,12 @@ class ICEExporter(QtCore.QThread):
         # kick-off thread
         self.start()
 
-    def export_file( self, file, destination, supported_attributes ):    
+    def export_files( self, files, destination, supported_attributes ):    
         """ start exporting cache files """
 
-        self.files = [ file ]
-        self.startindex = int(re.findall(r'\d+',file)[-1])
+        self.cancel()
+        self.exiting = False
+        (self.files,self.startindex,end) = get_files(files)
         self.destination_folder = destination
         self.supported_attributes = supported_attributes
         
@@ -64,16 +72,21 @@ class ICEExporter(QtCore.QThread):
         index = self.startindex
         i = 0
 
-        while not self.exiting and n > 0:            
-            reader = ICEReader( self.files[i] )    
-            reader.load_data( self.supported_attributes )
-            reader.log_info( self.destination_folder )
+        self.beginCacheExporting.emit( n )
 
-            """ Tell  clients that a cache has been exported """
-            self.cacheExported.emit( index, reader )
+        while not self.exiting and i<n:            
+            reader = ICEReader( self.files[i] )                
+            reader.load( self.supported_attributes )
+            export_filepath = reader.get_export_file_path( self.destination_folder )
+
+            self.cacheExporting.emit( export_filepath )
+
+            reader.export( export_filepath )
 
             i += 1
             index += 1
-            n -= 1
+            #n -= 1
 
             del reader
+
+        self.endCacheExporting.emit( )

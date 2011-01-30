@@ -18,17 +18,10 @@
 
 from PyQt4 import QtCore, QtGui
 
-class PlaybackWidget( QtGui.QWidget ):
-    #slots
-    startcacheChanged = QtCore.pyqtSignal(int) 
-    endcacheChanged = QtCore.pyqtSignal(int) 
-    cacheChanged = QtCore.pyqtSignal(int) 
-    playChanged = QtCore.pyqtSignal() 
-    stopChanged = QtCore.pyqtSignal() 
-    loopChanged = QtCore.pyqtSignal( bool ) 
+class PrefsWidget( QtGui.QDialog ):
     
-    def __init__( self, viewer, parent=None ):
-        super( PlaybackWidget, self).__init__(parent)
+    def __init__( self, parent=None ):
+        super( PrefsWidget, self).__init__(parent)
 
         self.current_cache = 1
         self.start_cache = 1
@@ -130,15 +123,7 @@ class PlaybackWidget( QtGui.QWidget ):
         viewer.beginDrawCache.connect(self.on_begin_drawcache)
         viewer.endDrawCache.connect(self.on_end_drawcache)
         viewer.beginPlayback.connect(self.on_begin_playback)
-        viewer.endPlayback.connect(self.on_end_playback)      
-
-        # Connect playback signals to viewer slots
-        self.cacheChanged.connect(viewer.on_cache_change)        
-        self.startcacheChanged.connect(viewer.on_start_cache_change)
-        self.endcacheChanged.connect(viewer.on_end_cache_change)
-        self.playChanged.connect(viewer.on_play)
-        self.stopChanged.connect(viewer.on_stop)
-        self.loopChanged.connect(viewer.on_loop)        
+        viewer.endPlayback.connect(self.on_end_playback)        
         
     def on_playtoggled( self ):
         if self.playtoggle.isChecked() == True:

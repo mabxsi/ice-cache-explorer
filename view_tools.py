@@ -20,7 +20,7 @@ import sys
 from PyQt4 import QtCore, QtGui
 from OpenGL.GL import *
 from basics import Vec3
-from icereader_util import log_error
+from icereader_util import report_error
 
 class ViewTool(object):    
     def __init__(self, name, parent):
@@ -48,21 +48,21 @@ class NoTool(ViewTool):
 
     def activate(self):
         super(NoTool,self).activate()
-        self.parent.statusbar.clearMessage()            
-
+        self.parent.right_msg.setText("")            
+        #self.parent.repaint()
+        
 class PanTool(ViewTool):
     def __init__(self,parent):
         super(PanTool,self).__init__( 'PAN', parent )
         self.panning_vec = Vec3()
         self.key = QtCore.Qt.Key_P
-        #self.cursor = QtGui.QCursor( QtCore.Qt.SizeAllCursor )
         self.cursor = QtGui.QCursor( QtGui.QPixmap( './resources/pan_cursor.png' ) )
             
     def activate(self):
         super(PanTool,self).activate()        
         self.parent.setCursor( self.cursor )
-        self.parent.repaint(True)        
-        self.parent.statusbar.showMessage("PAN: Left Mouse Button, ZOOM: Right Mouse Button")            
+        self.parent.right_msg.setText("PAN: Left Mouse Button, ZOOM: Right Mouse Button")            
+        #self.parent.repaint()        
 
     def move(self, mouse_button, deltaX, deltaY ):
         if mouse_button == QtCore.Qt.LeftButton:
@@ -93,8 +93,8 @@ class OrbitTool(ViewTool):
     def activate(self):
         super(OrbitTool,self).activate()
         self.parent.setCursor( self.cursor )
-        self.parent.repaint(True)                
-        self.parent.statusbar.showMessage("ORBIT: Left Mouse Button, ZOOM: Right Mouse Button")            
+        self.parent.right_msg.setText("ORBIT: Left Mouse Button, ZOOM: Right Mouse Button")            
+        #self.parent.repaint()                
 
     def move(self, mouse_button, deltaX, deltaY ):
         if mouse_button == QtCore.Qt.LeftButton:
@@ -122,8 +122,8 @@ class ZoomTool(ViewTool):
     def activate(self):
         super(ZoomTool,self).activate()
         self.parent.setCursor( self.cursor )
-        self.parent.repaint(True)                        
-        self.parent.statusbar.showMessage("ZOOM: Left/Right Mouse Button")            
+        self.parent.right_msg.setText("ZOOM: Left/Right Mouse Button")            
+        #self.parent.repaint()                        
 
     def move(self, mouse_button, deltaX, deltaY ):
         if mouse_button == QtCore.Qt.LeftButton or mouse_button == QtCore.Qt.RightButton:
@@ -200,7 +200,7 @@ class ToolManager(object):
             tool.deactivate()
             tool.parent.setCursor( self.old_cursor )
         except:
-            log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
+            report_error( 'tool error %s' % tool.name )
 
         #activate new tool
         self.active_tool = tool

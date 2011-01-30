@@ -31,6 +31,7 @@ class CONSTS:
     siICENodeContextSingletonOrComponent1D=0x5          # from enum siICENodeContextType
     siICENodeContextSingletonOrComponent2D=0x9          # from enum siICENodeContextType
     siICENodeContextSingletonOrElementGenerator=0x21    # from enum siICENodeContextType
+    
     siICENodeDataAny              =0x7ffff    # from enum siICENodeDataType
     siICENodeDataArithmeticSupport=0x41fe     # from enum siICENodeDataType
     siICENodeDataBool             =0x1        # from enum siICENodeDataType
@@ -55,12 +56,37 @@ class CONSTS:
     siICENodeDataVector2          =0x8        # from enum siICENodeDataType
     siICENodeDataVector3          =0x10       # from enum siICENodeDataType
     siICENodeDataVector4          =0x20       # from enum siICENodeDataType
+    
     siICENodeStructureAny=0x3
     siICENodeStructureArray =0x2      # from enum siICENodeStructureType
     siICENodeStructureSingle =0x1      # from enum siICENodeStructureType
-    siICECacheV1      = 100
-    siICECacheV1_1    = 101
-    siICECacheV1_2    = 102
+    
+    siICEAttributeCategoryUnknown = 0
+    siICEAttributeCategoryBuiltin = 1
+    siICEAttributeCategoryCustom = 2    
+    
+    siICENodeObjectPointCloud = 0
+    siICENodeObjectPolygonMesh = 1
+    siICENodeObjectNurbsMesh = 2
+    siICENodeObjectNurbsCurve = 3
+    
+    siICEShapePoint		=0
+    siICEShapeSegment	=1
+    siICEShapeDisc		=2
+    siICEShapeRectangle	=3
+    siICEShapeSphere	=4
+    siICEShapeBox		=5
+    siICEShapeCylinder	=6
+    siICEShapeCapsule	=7
+    siICEShapeCone		=8
+    siICEShapeBlob		=9
+    siICEShapeInstance  =128
+    siICEShapeReference	=129
+    
+    siICECacheV100    = 100
+    siICECacheV101    = 101
+    siICECacheV102    = 102
+    siICECacheV103    = 103
 
     SS_MENUBAR = "\
         QMenuBar {\

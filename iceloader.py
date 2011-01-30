@@ -37,8 +37,14 @@ class ICECacheLoader(QtCore.QThread):
         self.exiting = True
         self.wait()
 
+    def cancel(self):
+        self.exiting = True
+        self.wait()
+        
     def load_cache_files( self, files, start, end, supported_attributes ):    
         """ start loading cache files """
+        self.cancel()
+        self.exiting = False
         self.files = files
         self.supported_attributes = supported_attributes
         self.startindex = start
@@ -50,7 +56,11 @@ class ICECacheLoader(QtCore.QThread):
     def __load_data_from_file__( self, cache, filename ):                        
         """ create a reader lo load a given cache file and returns a tuple contianing the reader and the data. """
         reader = ICEReader( filename )    
-        reader.load_data( self.supported_attributes )
+        try:
+            reader.load( self.supported_attributes )
+        except:
+            # something is wrong, probably a bad file format 
+            return ( reader, [], [], [] )
 
         points = []
         colors = []
@@ -71,17 +81,17 @@ class ICECacheLoader(QtCore.QThread):
     def run(self):
         """ Called by the python thread when a thread has started. """
         n = len(self.files)
+        #print 'files to load %d' % n
         index = self.startindex
         i = 0
 
         load_start_time = time.clock()        
 
-        while not self.exiting and n > 0:
-            data = self.__load_data_from_file__( index, self.files[i] )            
+        while not self.exiting and i < n:
+            data = self.__load_data_from_file__( index, self.files[i] )                
             
             """ Tell interested clients that a new cache has been loaded """
             self.cacheLoaded.emit( index, data )
 
             i += 1
             index += 1
-            n -= 1

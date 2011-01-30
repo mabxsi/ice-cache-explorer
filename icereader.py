@@ -22,108 +22,70 @@ import gzip
 import struct
 import re
 from consts import CONSTS
-from icereader_util import dataAccessorPool
-from icereader_util import log_error
-from cStringIO import StringIO 
+from icereader_util import *
 
 try:
     import numpy 
 except:
     print "ERROR: numpy not installed properly."
     sys.exit()
-
-_trace = False
-
-def _debug( msg ):
-    if _trace:
-        print '*** %s ***' % msg
+   
 """
 import gc
  gc.set_debug(gc.DEBUG_LEAK)
 """
 
-class ICEReader(object):
-    INVALID_INT = 1,
-    INVALID_STRING = 'invalid string',
-    ICECACHE_CHUNK_SIZE = 4000
-    class Header(object):
-        def __init__(self):
-            self.name = None
-            self.version = 0
-            self.type = 0
-            self.particle_count = 0
-            self.edge_count = 0
-            self.polygon_count = 0
-            self.sample_count = 0
-            self.blob_count = 0
-            self.attribute_count = 0
-
-        def __str__(self):
-            return  ("[Header info]\nname = %s\nversion = %d\ntype = %d\nparticle_count = %d\nedge_count = %d\npolygon_count = %d\nsample_count = %d\nblob_count = %d\nattribute_count = %d\n") % ( self.name, self.version, self.type, self.particle_count, self.edge_count, self.polygon_count, self.sample_count, self.blob_count, self.attribute_count )
-
-    class Attribute(object):
-        def __init__(self):
-            self.name = None
-            self.datatype = 0
-            self.structtype = 0
-            self.contexttype = 0
-            self.objid = 0
-            self.category = 0
-            self.ptlocator_size = 0
-            self.blobtype_count = 0
-            self.blobtype_names = ()
-            self.isconstant = True
-
-        def __str__(self):
-            s = ("[Attribute info]\nname = %s\ndatatype = %d\nstructtype = %d\ncontexttype = %d\nobjid = %d\ncategory = %d\nptlocator_size = %d\nis constant = %d\n") % ( self.name, self.datatype, self.structtype, self.contexttype, self.objid, self.category, self.ptlocator_size, self.isconstant )
-            
-            for i in range(self.blobtype_count):
-                s += ("   blob %d = %s\n") % (i,self.blobtype_name(i))
-                        
-            #slist = [("   blob %d = %s\n") % (i,self.blobtype_name(i)) for i in range(self.blobtype_count)]
-            #s = s.join(slist)             
-            return s       
-
+class ICEReader(object):    
     def __init__(self,filename):
         """ open file and store the file pointer """
         self._filename = filename
-        self._file = None        
         self._header = None
         self._attributes = None
         self._data = {}
-        #self.__read_attributes_data__ = self.__read_attributes_data_pylist__
-        self.__read_attributes_data__ = self.__read_attributes_data_numpy__
-        
+        file = None
         try:
-            self.file = gzip.open( self._filename, 'rb' )
+            file = gzip.open( self._filename, 'rb' )
         except:
-            print 'invalid file %s' % filename
-            
-           
+            print 'Error - Invalid file: %s' % filename
+                               
+        self.handler = ICECacheFileHandler( file )
+
     def __del__(self):
-        self.close()
+        self._header = None
+        self._attributes = None
+        self._data = {}
+        self.handler = None
 
     def filename(self):
         return self._filename
         
-    def load_data(self, attributes_to_load=() ):
-        self.__read_header__()
-        self.__read_attributes_desc__()
-        self.__read_attributes_data__( attributes_to_load )
-        self.file.flush()
-
+    def load(self, attributes_to_load=('PointPosition___') ):
+        """ load the underlying cache file """
+        try:
+            self.__read_header__()
+            self.__read_attributes_desc__()
+            self.__read_attributes_data__( attributes_to_load )
+            self.handler.file.flush()
+        except ICECacheVersionError:
+            print 'Error - ICE Cache version not supported'
+        
+        if self._header == None:
+            raise ICECacheDataReadError
+            
     def header(self):
         return self._header
 
     def attributes(self):
         return self._attributes
 
-    def log_info(self, destination_folder ):
-
-        # build log file path        
+    def get_export_file_path( self, destination_folder ):
+        """ create export folder """
         filepath = os.path.join(destination_folder, os.path.basename(self._filename)  ) + '.txt'
-                
-        f = open( filepath, 'w' )        
+        return filepath
+
+    def export(self, export_file_path ):                
+        """ export the underlying file to ascii """
+        f = open( export_file_path, 'w' )        
         f.write( str(self._header) )
         f.write( '\n' )
                 
@@ -136,10 +98,11 @@ class ICEReader(object):
             # data            
             accessor = dataAccessorPool.accessor(a.datatype,a.structtype)
             
-            if a.name in self._data:                
-                f.write( accessor.format( self._data[ a.name ] ) )
-            else:
-                f.write( accessor.format( [] ) )
+            if a.name in self._data:     
+                data_array = self._data[ a.name ]
+                if a.isconstant == True:
+                    data_array = [ self._data[ a.name ][0] ]
+                f.write( accessor.format( data_array ) )
 
             f.write( '\n' )
             f.flush()
@@ -147,195 +110,97 @@ class ICEReader(object):
         f.close()
             
     def close(self):
-        self.file.close()
+        del self.handler
+        self.handler = None
 
     def __getitem__( self, arg ):
-        #return numpy.array( self._data[ arg ] )
+        """ return data buffer by name """
         return self._data[ arg ]
-        
+
+    # Internals
     def __read_header__(self):        
-        if self.file == None:
-                return None
-
-        try:
-            self._header = ICEReader.Header()        
-        
+        """ Read header section. Supported versions are 102 and 103. """
+        try:            
+            v = self.handler.icecache_version()            
+            if v == CONSTS.siICECacheV102:                
+                self._header = HeaderV102()        
+            elif v == CONSTS.siICECacheV103:
+                self._header = HeaderV103()
+            else:
+                raise ICECacheVersionError        
         except:
-            print 'error ICEReader.Header'
+            print 'Error - ICE Cache version not supported'
+            return
         
         try:
-            self._header.name = self.file.read( 8 )
-            self._header.version = self.__read_int__()
-            self._header.type = self.__read_int__()
-            self._header.particle_count = self.__read_int__()
-            self._header.edge_count = self.__read_int__()
-            self._header.polygon_count = self.__read_int__()
-            self._header.sample_count = self.__read_int__()
-            self._header.blob_count = self.__read_int__()
-            self._header.attribute_count = self.__read_int__()
+            self._header.read( self.handler )            
         except:
-            print 'error reading header'
+            report_error( 'self._header', sys.exc_info() )
+            raise Exception
 
-        #_debug( self._header )
         return self._header
 
-    def __read_attributes_desc__(self):
-        if self.file == None:
-            return None
+    def __read_attributes_desc__(self):       
+        """ Read all attribute descriptions """
+        if self._header == None:
+            return None        
         
         self._attributes = []
         for i in range(self._header.attribute_count):            
-            attrib = ICEReader.Attribute()
-            
-            attrib.name = self.__read_string__()
-            attrib.datatype = self.__read_int__()
-            
-            if attrib.datatype == CONSTS.siICENodeDataCustomType and self._header.version > CONSTS.siICECacheV1_1:
-                attrib.blobtype_count = self.__read_int__()
-                
-                for i in range( attrib.blobtype_count ):
-                    attrib.blobtype_names.append( self.__read_string__() )                
-
-            attrib.structtype = self.__read_int__()
-            attrib.contexttype = self.__read_int__()
-            attrib.objid = self.__read_int__()
-            attrib.category = self.__read_int__()
-
-            if attrib.datatype == CONSTS.siICENodeDataLocation:
-                attrib.ptlocator_size = self.__read_int__()
-
-            #_debug( attrib )
-
+            attrib = Attribute()        
+            attrib.read( self.handler )            
             self._attributes.append( attrib )
         
         return self._attributes
 
-    def __read_attributes_data_pylist__(self, to_load ):
-        if self.file == None:
+    def __read_attributes_data__(self, data_to_load ):
+        """ Read all attribute data. Attributes data are skipped if not specified in data_to_load """
+        if self._header == None:
             return None        
 
-        for i in range(self._header.attribute_count):    
-            data = []
-            attrib = self._attributes[i]            
-
-            toKeep = False
-            if attrib.name in to_load:
-                toKeep = True
-
-            #_debug( attrib )
-            accessor = dataAccessorPool.accessor(attrib.datatype,attrib.structtype)
+        if self._header.type == CONSTS.siICENodeObjectPointCloud and self._header.particle_count == 0:
+            return None
             
-            if attrib.name == 'PointPosition___':
-                # exception for point position attribute: constant flag is only stored once for pointposition
-                attrib.isconstant = bool(self.__read_int__())
-                
-                buffer = StringIO(self.file.read( self._header.particle_count*accessor.size() ))
-                                
-                for index in range(self._header.particle_count):                  
-                    data.append( accessor.read( buffer ) )
-                buffer.close()                
-                
-                toKeep = True
-            else:
-                # get number of elements to read based on the attribute context
-                elemCount = 0
-                if attrib.contexttype == CONSTS.siICENodeContextSingleton:
-                    elemCount = 1
-                elif attrib.contexttype == CONSTS.siICENodeContextComponent0D:
-                    elemCount = self._header.particle_count
-                elif attrib.contexttype == CONSTS.siICENodeContextComponent1D:
-                    elemCount = self._header.edge_count
-                elif attrib.contexttype == CONSTS.siICENodeContextComponent2D:
-                    elemCount = self._header.polygon_count
-                elif attrib.contexttype == CONSTS.siICENodeContextComponent0D2D:
-                    elemCount = self._header.sample_count
-                else:
-                    # no element set 
-                    continue
-                
-                if attrib.datatype == CONSTS.siICENodeDataLocation:
-                    # just skip point locators
-                    size = self.__read_int__()
-                    self.file.read( size )
-                    continue
-                
-                # loop over chunks and read the attributes
-                chunks = self.__chunks__( elemCount )
-                #print 'chunks %d' % len(chunks)
-                for chunk in chunks:                    
-                    # the constant flag value should be the same for all chunks
-                    attrib.isconstant = bool(self.__read_int__())     
-                    if attrib.isconstant == True:
-                        # read the const value
-                        if toKeep:
-                            print 'constant value %s %d' % (attrib.name,len(chunk))
-                            # append the whole chunk to array 
-                            buffer = StringIO(self.file.read( len(chunk)*accessor.size() ))
-                            constVal = accessor.read( buffer )
-                            for i in chunk:         
-                                data.append( constVal )
-                            buffer.close()
-                        else:
-                            try:
-                                # note: seek forward seems buggy, use read instead
-                                self.file.read( len(chunk)*accessor.size() )                            
-                            except:
-                                log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
-                    else:
-                        if toKeep:
-                            #read all values in the chunk                        
-                            buffer = StringIO(self.file.read( len(chunk)*accessor.size() ))                        
-                            for index in chunk:         
-                                data.append( accessor.read( buffer ) )
-                            buffer.close()
-                        else:
-                            try:
-                                # note: seek forward seems buggy, use read instead
-                                self.file.read( len(chunk)*accessor.size() )                            
-                            except:
-                                log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
-
-            if toKeep:
-                self._data[ attrib.name ] = data
-            del data
-
-    def __read_attributes_data_numpy__(self, to_load ):
-        if self.file == None:
-            return None        
-
+        # keep all data if nothing is specified
+        to_keep = len(data_to_load) == 0
+        
         for i in range(self._header.attribute_count):    
             attrib = self._attributes[i]            
 
-            toKeep = False
-            if attrib.name in to_load:
-                toKeep = True
+            if to_keep == False and attrib.name in data_to_load:
+                to_keep = True
 
-            #_debug( attrib )
-            accessor = dataAccessorPool.accessor(attrib.datatype,attrib.structtype)
-            
+            try:
+                accessor = dataAccessorPool.accessor( attrib.datatype, attrib.structtype )
+                accessor.handler = self.handler
+            except:
+                raise ICECacheDataAccessorError 
+                
             if attrib.name == 'PointPosition___':
                 # exception for point position attribute: constant flag is only stored once for pointposition
-                attrib.isconstant = bool(self.__read_int__())
+                attrib.isconstant = bool(self.handler.read_int())
 
                 # create Nx3 array 
                 try:                    
-                    data = numpy.zeros( (self._header.particle_count, accessor.length() ), dtype=accessor.type() )
+                    data = accessor.allocate_array( self._header.particle_count )
                 except:
-                    log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
+                    report_error( 'PointPosition accessor.allocate_array', sys.exc_info() )                    
+                    raise Exception
                 
-                # load entire block in memory
-                buffer = StringIO(self.file.read( self._header.particle_count*accessor.size() ))
-                self.file.flush()
+                # load entire block in memory                
+                accessor.read_block( self._header.particle_count )
                 for index in xrange( self._header.particle_count ):
                     try:
-                        data[index] = accessor.read( buffer )
+                        data[index] = accessor.read( )
                     except:
-                        log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
-                        
-                buffer.close()
-                
+                        report_error( 'load entire block in memory', sys.exc_info() )
+                        raise Exception 
+                                           
+                accessor.release_block()                
                 self._data[ attrib.name ] = data
             else:
+                # Process other attributes
+                
                 # get number of elements to read based on the attribute context
                 elemCount = 0
                 if attrib.contexttype == CONSTS.siICENodeContextSingleton:
@@ -354,117 +219,82 @@ class ICEReader(object):
                 
                 if attrib.datatype == CONSTS.siICENodeDataLocation:
                     # just skip point locators
-                    size = self.__read_int__()
-                    self.file.read( size )
+                    accessor.read( )
                     continue
 
-                if toKeep:
+                if to_keep:
                     # create [elemCount X length] array of type type()
                     try:
-                        data = numpy.zeros( (elemCount, accessor.length() ), accessor.type() )
+                        data = accessor.allocate_array( elemCount )
                         self._data[ attrib.name ] = data
                     except:
-                        log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )                                        
+                        report_error( 'create [elemCount X length] array of type type()', sys.exc_info() )
+                        raise Exception
                 
-                # loop over chunks and read the attributes
-                chunks = self.__chunks__( elemCount )
-                #print 'chunks %d' % len(chunks)
+                # get required nb of chunks to accomodate elemCount values
+                chunks = self.handler.chunks( elemCount )
                 index = 0
                 for chunk in chunks:                    
-                    # the constant flag value should be the same for all chunks
-                    attrib.isconstant = bool(self.__read_int__())     
+                    # the constant flag value should be the same in all chunks                    
+                    attrib.isconstant = bool(self.handler.read_int())
+                        
                     if attrib.isconstant == True:
                         # read the const value
-                        if toKeep:
-                            # append the whole chunk to array 
-                            buffer = StringIO(self.file.read( accessor.size() ))                            
-                            self.file.flush()
-                            constVal = accessor.read( buffer )
+                        if to_keep:
+                            accessor.read_block( 1 )
+                            constVal = accessor.read( )
                             
-                            for i in chunk:         
-                                data[index] = constVal
-                                index +=1                                
-                            buffer.close()
+                            # assign to data array
+                            for i in chunk:        
+                                try:
+                                    data[index] = constVal
+                                except:
+                                    report_error( 'error reading:\n%s' % attrib, sys.exc_info() )
+                                index +=1
+                            accessor.release_block()
                         else:
                             try:
                                 # note: seek forward seems buggy, use read instead
-                                self.file.read( len(chunk)*accessor.size() )          
-                                self.file.flush()
+                                self.handler.file.read( len(chunk)*accessor.size() )
+                                self.handler.file.flush()
                             except:
-                                log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
+                                report_error( 'error seeking %d bytes for attrib:\n%s' % (len(chunk)*accessor.size(),attrib), sys.exc_info() )
+                                raise Exception                                
+
                     else: 
                         # non-constant values
-                        if toKeep:
-                            #load chunk and assing all values to array
-                            buffer = StringIO(self.file.read( len(chunk)*accessor.size() ))
-                            self.file.flush()                            
-                            for i in chunk:         
-                                data[index] = accessor.read( buffer )
+                        if to_keep:
+                            # read data from block and assign all values to array
+                            accessor.read_block( len(chunk) )                            
+                            for i in chunk:
+                                try:
+                                    data[index] = accessor.read( )
+                                except:
+                                     report_error( 'error reading:\n%s' % attrib, sys.exc_info() )
                                 index +=1
-                            buffer.close()
+                            accessor.release_block()
                         else:
                             try:
                                 # note: seek forward seems buggy, use read instead
-                                self.file.read( len(chunk)*accessor.size() )     
-                                self.file.flush()
+                                self.handler.file.read( len(chunk)*accessor.size() )
+                                self.handler.file.flush()
                             except:
-                                log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
-            
-    def __chunks__( self, elemCount ):
-        """ 
-        compute number of chunks based on the total number of elements
-        """
-        if elemCount < self.ICECACHE_CHUNK_SIZE:
-            return [range(elemCount)]
-        
-        outChunks = []
-        chunks = elemCount / self.ICECACHE_CHUNK_SIZE
-        for i in xrange(chunks):
-            outChunks.append(xrange((i)*self.ICECACHE_CHUNK_SIZE, (i+1)*self.ICECACHE_CHUNK_SIZE))
-        outChunks.append(xrange( (i+1)*self.ICECACHE_CHUNK_SIZE, (i+1)*self.ICECACHE_CHUNK_SIZE + elemCount%self.ICECACHE_CHUNK_SIZE) )
-        
-        return outChunks
-
-    def __read_string__(self):
-        try:
-            (length,) = struct.unpack( 'I', self.file.read( 4 ))
-            
-            if (length % 4) > 0 :
-                length += 4- (length % 4)
-
-            s = self.file.read( length )
-            return s
-
-        except:
-            log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
-            
-        return self.INVALID_STRING
-            
-    def __read_int__(self):
-        try:
-            (value,) = struct.unpack( 'I', self.file.read( 4 ))
-            return value
-        except:            
-            log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
-        return self.INVALID_INT
-    
-    def __read_vector3f__(self):
-        try:
-            value = struct.unpack( '3f', self.file.read( 12 ) )
-            return value
-        except:
-            log_error( sys._getframe(0), sys._getframe(1), sys.exc_info() )
-        return ()
-
+                                report_error( 'error seeking %d bytes for attrib:\n%s' % (len(chunk)*accessor.size(),attrib), sys.exc_info() )
+                                raise Exception
+                    
 def get_files_from_cache_folder( dir ):
     """ Get all cache files from dir and sort them by frame number """                
     files = []
     # grab the files
     for dirname, dirnames, filenames in os.walk(dir):
+        filenames = filter( lambda x: x.endswith('.icecache'), filenames )        
         for filename in filenames:
             files.append( os.path.join(dirname, filename) ) 
-            
-    # sort function 
+    
+    return get_files( files )
+    
+def get_files( files ):
+    """ sort function by the cache frame number embedded in the file name """
     def cmp_by_num (x,y):
         def get_last_num(str): 
             return float(re.findall(r'\d+',str)[-1])
@@ -479,31 +309,133 @@ def get_files_from_cache_folder( dir ):
     
     files.sort( cmp_by_num )
 
+    if files == []:
+        # no files to process
+        return ()
+        
     # extract start and end cache number
     start = int(re.findall(r'\d+',files[0])[-1])
     end = int(re.findall(r'\d+',files[-1])[-1])
     
     if end > len(files):
         end = (start + len(files)) -1 
-    
+
     return (files,start,end)
 
+def is_valid_file( cachefile ):
+    return cachefile.endswith('.icecache')
+    
+class HeaderV102(object):
+    """ Version 102 ICE cache object """
+    def __init__(self):
+        self.name = None
+        self.version = 0
+        self.type = 0
+        self.particle_count = 0
+        self.edge_count = 0
+        self.polygon_count = 0
+        self.sample_count = 0
+        self.blob_count = 0
+        self.attribute_count = 0
+
+    def read( self, handler ):
+        self.name = handler.read_header_name( )
+        self.version = handler.read_int( )
+        self.type = handler.read_int( )
+        self.particle_count = handler.read_int( )
+        self.edge_count = handler.read_int( )
+        self.polygon_count = handler.read_int( )
+        self.sample_count = handler.read_int( )
+        self.blob_count = handler.read_int( )
+        self.attribute_count = handler.read_int( )
+
+    def __str__(self):
+        return  ("[Header info]\nname = %s\nversion = %d\ntype = %s\nparticle_count = %d\nedge_count = %d\npolygon_count = %d\nsample_count = %d\nblob_count = %d\nattribute_count = %d\n") % ( self.name, self.version, objtype_to_string(self.type), self.particle_count, self.edge_count, self.polygon_count, self.sample_count, self.blob_count, self.attribute_count )
+
+class HeaderV103(object):
+    """ Version 103 ICE cache object """
+    def __init__(self):
+        self.name = None
+        self.version = 0
+        self.type = 0
+        self.particle_count = 0
+        self.edge_count = 0
+        self.polygon_count = 0
+        self.sample_count = 0
+        self.blob_count = 0
+        self.attribute_count = 0
+        self.substepscount = 0
+
+    def read( self, handler ):
+        self.name = handler.read_header_name( )
+        self.version = handler.read_int( )
+        self.type = handler.read_int( )
+        self.particle_count = handler.read_int( )
+        self.edge_count = handler.read_int( )
+        self.polygon_count = handler.read_int( )
+        self.sample_count = handler.read_int( )
+        self.substepscount = handler.read_int( )
+        self.blob_count = handler.read_int( )
+        self.attribute_count = handler.read_int( )
+
+    def __str__(self):
+        return  ("[Header info]\nname = %s\nversion = %d\ntype = %s\nparticle_count = %d\nedge_count = %d\npolygon_count = %d\nsample_count = %d\nblob_count = %d\nattribute_count = %d\nsubstepscount = %d\n\n") % ( self.name, self.version, objtype_to_string(self.type), self.particle_count, self.edge_count, self.polygon_count, self.sample_count, self.blob_count, self.attribute_count, self.substepscount )
+
+class Attribute(object):
+    """ ICECache Attribute object """
+    def __init__(self):
+        self.name = None
+        self.datatype = 0
+        self.structtype = 0
+        self.contexttype = 0
+        self.objid = 0
+        self.category = 0
+        self.ptlocator_size = 0
+        self.blobtype_count = 0
+        self.blobtype_names = ()
+        self.isconstant = True
+
+    def read( self, handler ):
+        self.name = handler.read_name()
+        self.datatype = handler.read_int()
+        
+        if self.datatype == CONSTS.siICENodeDataCustomType:
+            self.blobtype_count = handler.read_ulong()            
+            for i in range( self.blobtype_count ):
+                attrib.blobtype_names.append( handler.read_name() )                
+
+        self.structtype = handler.read_int()
+        self.contexttype = handler.read_int()
+        self.objid = handler.read_int()
+        self.category = handler.read_int()
+
+        if self.datatype == CONSTS.siICENodeDataLocation:
+            self.ptlocator_size = handler.read_ulong()
+        
+    def __str__(self):
+        s = ("[Attribute info]\nname = %s\ndatatype = %s\nstructtype = %s\ncontexttype = %s\nobjid = %d\ncategory = %s\nptlocator_size = %d\nis constant = %d\n\n") % ( self.name, datatype_to_string(self.datatype), structtype_to_string(self.structtype), contexttype_to_string(self.contexttype), self.objid, categorytype_to_string(self.category), self.ptlocator_size, self.isconstant )
+        
+        for i in range(self.blobtype_count):
+            s += ("   blob %d = %s\n") % (i,self.blobtype_name(i))
+                    
+        return s       
+
+class ICECacheVersionError(Exception):
+    """ICECache version not supported"""
+    pass
+
+class ICECacheDataAccessorError(Exception):
+    """ICECache data accessor error"""
+    pass
+
 def test():
-    r = ICEReader( r'C:\dev\icecache_data\TEST\478.icecache' )
-    #print r.file.read()
+    r = ICEReader(r'C:\dev\svn\test150\pouring_liquid_pointcloud_SimTake1_1.icecache')
+    h = r.__read_header__()
+    print h
+    a = r.__read_attributes_desc__()
+    for i in a:
+        print i
 
-    import time
-    t = time.clock()
-    #r.load_data( ('Color___') )
-    r.load_data( () )
-    print 'array count %d' % len(r._data)
-    print 'elapsed time (ms) = %f' % (time.clock()-t)
-    r.log_info( r'c:\temp' )
-
-def main():
-    # load points only
-    r = ICEReader( r'C:\dev\icecache_data\TEST\478.icecache' )
-    r.load_data( () )
-
+    r.__read_attributes_data__()
 if __name__ == '__main__':
     test()

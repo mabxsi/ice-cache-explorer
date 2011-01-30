@@ -17,15 +17,17 @@
 ###############################################################################
 
 from PyQt4 import QtCore, QtGui
-#from iceviewer import ICEViewer
+import numpy
 
 class ICEDataLoader(QtCore.QThread):
     """ Worker thread for loading ICE cache data. """
-    # signal sent data has been loaded
+    # signals
     # string: cache name
     # string: attribute name
-    beginCacheDataLoading = QtCore.pyqtSignal( str, str ) 
-    endCacheDataLoading = QtCore.pyqtSignal( str, str ) 
+    # int: num values
+    beginCacheDataLoading = QtCore.pyqtSignal( str, str, int ) 
+    endCacheDataLoading = QtCore.pyqtSignal( ) 
+    cacheDataLoaded = QtCore.pyqtSignal( ) 
 
     def __init__(self, parent = None):
         super(ICEDataLoader,self).__init__(parent)
@@ -54,30 +56,36 @@ class ICEDataLoader(QtCore.QThread):
             for i in range(item.childCount()):
                 attribitem = item.child(i)
                 if attribitem.text(0) == 'Attribute':
-                    self.beginCacheDataLoading.emit( item.text(0), attribitem.text(1) )
-                    self.__load_attribute_data__( attribitem, cacheindex )
-                    self.endCacheDataLoading.emit( item.text(0), attribitem.text(1) )            
+                    self.__load_attribute_data__( item.text(0), attribitem, cacheindex )
         elif item.text(0) == 'Attribute':
             # load this attribute data
             cacheitem = item.parent()
             cacheindex = int( cacheitem.text(0).split(' ')[1] )
-            self.beginCacheDataLoading.emit( cacheitem.text(0), item.text(1) )
-            self.__load_attribute_data__( item, cacheindex )
-            self.endCacheDataLoading.emit( cacheitem.text(0), item.text(1) )            
+            #self.beginCacheDataLoading.emit( cacheitem.text(0), item.text(1) )
+            self.__load_attribute_data__( cacheitem.text(0), item, cacheindex )
+            #self.endCacheDataLoading.emit( cacheitem.text(0), item.text(1) )            
 
-    def __load_attribute_data__( self, item, cacheindex ):
+    def __load_attribute_data__( self, cache_name, attrib_item, cacheindex ):
             values = []
             try:
-                values = self.viewer.get_data( item.text(1), cacheindex )
+                values = self.viewer.get_data( attrib_item.text(1), cacheindex )
             except:
                 pass
 
-            nCount = item.childCount()
-            dataitem = item.child( nCount -1 )
+            self.beginCacheDataLoading.emit( cache_name, attrib_item.text(1), len(values) )
+
+            nCount = attrib_item.childCount()
+            dataitem = attrib_item.child( nCount -1 )
+            
             for i,val in enumerate(values):
+                self.cacheDataLoaded.emit( )
                 value = QtGui.QTreeWidgetItem( dataitem )
                 value.setText( 0, str(i) )
-                value.setText( 1, str(val) )        
+                # use numpy array string conversion
+                value.setText( 1, numpy.array_str(val,precision=6) )        
+            
+            self.endCacheDataLoading.emit( )            
+
             
     def run(self):
         """ Called by the python when the thread has started. """

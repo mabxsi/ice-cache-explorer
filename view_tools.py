@@ -49,7 +49,6 @@ class NoTool(ViewTool):
     def activate(self):
         super(NoTool,self).activate()
         self.parent.right_msg.setText("")            
-        #self.parent.repaint()
         
 class PanTool(ViewTool):
     def __init__(self,parent):
@@ -62,17 +61,14 @@ class PanTool(ViewTool):
         super(PanTool,self).activate()        
         self.parent.setCursor( self.cursor )
         self.parent.right_msg.setText("PAN: Left Mouse Button, ZOOM: Right Mouse Button")            
-        #self.parent.repaint()        
 
     def move(self, mouse_button, deltaX, deltaY ):
         if mouse_button == QtCore.Qt.LeftButton:
-            #print 'panning_mode == True and QtCore.Qt.LeftButton'
             factor = 0.02
             self.panning_vec.x += deltaX * factor
             self.panning_vec.y -= deltaY * factor
             return True
         elif mouse_button == QtCore.Qt.RightButton:
-            #print 'self.panning_mode == True and QtCore.Qt.RightButton'
             if deltaY > 0:
                 self.parent.camera.move( -0.01 )
             else:
@@ -94,17 +90,14 @@ class OrbitTool(ViewTool):
         super(OrbitTool,self).activate()
         self.parent.setCursor( self.cursor )
         self.parent.right_msg.setText("ORBIT: Left Mouse Button, ZOOM: Right Mouse Button")            
-        #self.parent.repaint()                
 
     def move(self, mouse_button, deltaX, deltaY ):
         if mouse_button == QtCore.Qt.LeftButton:
-            #print 'orbit_mode == True and mouse_button == QtCore.Qt.LeftButton'
             factor = 0.02
             self.parent.camera.origin.x -= deltaX * factor
             self.parent.camera.origin.y += deltaY * factor
             return True
         elif mouse_button == QtCore.Qt.RightButton:
-            #print 'self.panning_mode == True and QtCore.Qt.RightButton'
             if deltaY > 0:
                 self.parent.camera.move( -0.01 )
             else:
@@ -123,11 +116,9 @@ class ZoomTool(ViewTool):
         super(ZoomTool,self).activate()
         self.parent.setCursor( self.cursor )
         self.parent.right_msg.setText("ZOOM: Left/Right Mouse Button")            
-        #self.parent.repaint()                        
 
     def move(self, mouse_button, deltaX, deltaY ):
         if mouse_button == QtCore.Qt.LeftButton or mouse_button == QtCore.Qt.RightButton:
-            #print 'zoom == True and QtCore.Qt.RightButton'
             if deltaY > 0:
                 self.parent.camera.move( -0.01 )
             else:

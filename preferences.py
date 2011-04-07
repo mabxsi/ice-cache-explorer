@@ -1,5 +1,5 @@
 ###############################################################################
-# ICE Cache Explorer: A viewer and reader for ICE cache data
+# ICE Explorer: Application for viewing and inspecting ICE cache data.
 # Copyright (C) 2010  M.A. Belzile
 # 
 # This program is free software: you can redistribute it and/or modify
@@ -17,212 +17,66 @@
 ###############################################################################
 
 from PyQt4 import QtCore, QtGui
+import multiprocessing as mp
 
-class PrefsWidget( QtGui.QDialog ):
+class ICEPreferences( QtGui.QDialog ):
     
     def __init__( self, parent=None ):
-        super( PrefsWidget, self).__init__(parent)
+        super( ICEPreferences, self).__init__(parent)
+        self.setWindowTitle("Preferences")
 
-        self.current_cache = 1
-        self.start_cache = 1
-        self.end_cache = 100
-
-        self.playtoggle = QtGui.QPushButton( QtGui.QIcon(r'./resources/play.png'), '', self)
-        self.playtoggle.setFixedWidth(50)
-        self.playtoggle.setCheckable( True )
-        self.stepforward = QtGui.QPushButton( QtGui.QIcon(r'./resources/step-fwd.png'), '', self)
-        self.stepforward.setFixedWidth(50)
-        self.stepbackward = QtGui.QPushButton( QtGui.QIcon(r'./resources/step-back.png'), '', self)
-        self.stepbackward.setFixedWidth(50)
-        self.gotoend = QtGui.QPushButton(QtGui.QIcon(r'./resources/goto-last.png'), '', self)
-        self.gotoend.setFixedWidth(50)
-        self.gotostart = QtGui.QPushButton(QtGui.QIcon(r'./resources/goto-first.png'), '', self)
-        self.gotostart.setFixedWidth(50)
-        self.loop = QtGui.QPushButton(QtGui.QIcon(r'./resources/loop.png'), '', self)
-        self.loop.setFixedWidth(50)
-        self.loop.setCheckable( True )
-        
-        self.cache_label = QtGui.QLabel(str(self.start_cache), self)
-
-        self.startcache = QtGui.QLineEdit(self)
-        self.startcache.setValidator( QtGui.QIntValidator() )
-        self.startcache.setFixedWidth(30)
-        self.startcache.setText(str(self.start_cache))
-        self.endcache = QtGui.QLineEdit(self)
-        self.endcache.setValidator( QtGui.QIntValidator() )
-        self.endcache.setFixedWidth(30)
-        self.endcache.setText(str(self.end_cache))
-        
-        self.timeline = QtGui.QSlider( QtCore.Qt.Horizontal, parent )
-        self.timeline.setRange(self.start_cache, self.end_cache)
-        self.timeline.setSingleStep(1)
-        self.timeline.setPageStep(10)
-        self.timeline.setTickInterval(1)
-        self.timeline.setTickPosition(QtGui.QSlider.TicksRight)
-
-        hbox = QtGui.QHBoxLayout()      
-        hbox.addWidget(self.startcache)
-        hbox.addWidget(self.timeline)
-        hbox.addWidget(self.endcache)
-        hbox.setStretchFactor(self.startcache,1)
-        hbox.setStretchFactor(self.timeline,20)
-        hbox.setStretchFactor(self.endcache,1)
-        
-        hbox2 = QtGui.QHBoxLayout()    
-        hbox2.setSpacing(10)
-        hbox2.addStretch(10)
-        hbox2.addWidget(self.gotostart)         
-        hbox2.addWidget(self.stepbackward)         
-        hbox2.addWidget(self.playtoggle)         
-        hbox2.addWidget(self.stepforward)         
-        hbox2.addWidget(self.gotoend)
-        hbox2.addWidget(self.loop)    
-        hbox2.addStretch(10)
-
-        hbox3 = QtGui.QHBoxLayout()    
-        hbox3.addStretch(10)
-        hbox3.addWidget(self.cache_label)    
-        hbox3.addStretch(10)
-        
+        # dialog layout
         vbox = QtGui.QVBoxLayout()      
-        vbox.addLayout(hbox3)
-        vbox.addLayout(hbox)
-        vbox.addLayout(hbox2)
-        vbox.addStretch(10)
+
+        # process count
+        hbox = QtGui.QHBoxLayout()      
+        self.process_count_edit = QtGui.QLineEdit(self)
+        self.process_count_edit.setValidator( QtGui.QIntValidator() )
+        self.process_count_edit.setText( str(mp.cpu_count()) )
         
+        label = QtGui.QLabel('Number of processes', self)
+        
+        hbox.addWidget(label)
+        hbox.addWidget(self.process_count_edit)
+
+        vbox.addLayout(hbox)
+
+        # export folder
+        hbox = QtGui.QHBoxLayout()      
+        label = QtGui.QLabel('Export Folder', self)
+        self.export_folder_edit = QtGui.QLineEdit(self)
+        self.export_folder_edit.setText( r'c:\temp' )
+        hbox.addWidget(label)
+        hbox.addWidget(self.export_folder_edit)
+
+        vbox.addLayout(hbox)
+
+        # dialog buttons
+        ok_btn = QtGui.QPushButton('OK', self)
+        ok_btn.setDefault(True)
+        ok_btn.pressed.connect( self._on_click_ok )
+        
+        cancel_btn = QtGui.QPushButton('Cancel', self)
+        cancel_btn.pressed.connect( self._on_click_cancel )
+        
+        hbox = QtGui.QHBoxLayout()      
+        hbox.addWidget(ok_btn)
+        hbox.addWidget(cancel_btn)
+        vbox.addLayout(hbox)
+       
         self.setLayout(vbox)
 
-        self.__setup_signals__(viewer)
+    @property
+    def process_count(self):
+        return int(self.process_count_edit.text())
 
-    def __block_signals__( self, bFlag ):
-        self.timeline.blockSignals( bFlag )
-        self.startcache.blockSignals( bFlag )
-        self.endcache.blockSignals( bFlag )
-        self.stepforward.blockSignals( bFlag )
-        self.stepbackward.blockSignals( bFlag )
-        self.gotostart.blockSignals( bFlag )
-        self.gotoend.blockSignals( bFlag )
-        self.playtoggle.blockSignals( bFlag )
-        self.loop.blockSignals( bFlag )
+    @property
+    def export_folder(self):
+        return self.export_folder_edit.text()
 
-    def __setup_signals__(self,viewer):
-        self.timeline.valueChanged.connect(self.on_cache_change )
-        self.startcache.textChanged.connect(self.on_start_cache_change )
-        self.endcache.textChanged.connect(self.on_end_cache_change )
-        self.startcache.editingFinished.connect(self.on_start_cache_final_change )
-        self.endcache.editingFinished.connect(self.on_end_cache_final_change )
-        self.stepforward.pressed.connect( self.on_stepforward_pressed )
-        self.stepbackward.pressed.connect( self.on_stepbackward_pressed )
-        self.gotostart.pressed.connect( self.on_gotostart_pressed )
-        self.gotoend.pressed.connect( self.on_gotoend_pressed )
-        self.playtoggle.toggled.connect( self.on_playtoggled )
-        self.loop.toggled.connect( self.on_looptoggled )
-        viewer.beginCacheLoading.connect(self.on_begin_cache_loading)
-        viewer.cacheLoaded.connect(self.on_cache_loaded)
-        viewer.endCacheLoading.connect(self.on_end_cache_loading)
-        viewer.beginDrawCache.connect(self.on_begin_drawcache)
-        viewer.endDrawCache.connect(self.on_end_drawcache)
-        viewer.beginPlayback.connect(self.on_begin_playback)
-        viewer.endPlayback.connect(self.on_end_playback)        
-        
-    def on_playtoggled( self ):
-        if self.playtoggle.isChecked() == True:
-            # prevent unecessary notifications from the timeline widget
-            self.timeline.blockSignals(True)            
-            self.playChanged.emit( )
-        else:
-            # reactivate notifications from the timeline widget
-            self.timeline.blockSignals(False)            
-            self.stopChanged.emit( )
-
-    def on_looptoggled( self ):
-        self.loopChanged.emit( self.loop.isChecked() )
-
-    def on_cache_change( self, cache ):
-        #print 'PlaybackWidget.on_cache_change %d' % (cache)
-        self.current_cache = cache
-        #self.cache_label.setText('Cache: %d' % cache )
-        self.cache_label.setText( str(self.current_cache) )
-        self.cacheChanged.emit( cache )        
-
-    def on_start_cache_change( self, cache ):
-        if cache:
-            self.start_cache = int(cache)
-
-    def on_end_cache_change( self, cache ):
-        if cache:
-            self.end_cache = int(cache)
-
-    def on_start_cache_final_change( self ):
-        self.startcacheChanged.emit( self.start_cache )
-        self.timeline.setValue( self.start_cache )
-        self.timeline.setRange(self.start_cache, self.end_cache)        
-
-    def on_end_cache_final_change( self ):
-        self.endcacheChanged.emit( self.end_cache )
-        self.timeline.setValue( self.end_cache )
-        self.timeline.setRange(self.start_cache, self.end_cache)        
-
-    def on_stepforward_pressed( self ):
-        self.current_cache += 1
-        if self.current_cache > self.end_cache:
-            self.current_cache = self.end_cache
-        
-        self.timeline.setValue( self.current_cache )
-
-    def on_stepbackward_pressed( self ):
-        self.current_cache -= 1
-        if self.current_cache < self.start_cache:
-            self.current_cache = self.start_cache
-            
-        self.timeline.setValue( self.current_cache )
-
-    def on_gotostart_pressed( self ):
-        self.current_cache = self.start_cache            
-        self.timeline.setValue( self.current_cache )
-
-    def on_gotoend_pressed( self ):
-        self.current_cache = self.end_cache
-        self.timeline.setValue( self.current_cache )
-
-    def on_begin_cache_loading( self, cache_count, start_cache, end_cache ):
-        #print 'PlaybackWidget.on_begin_cache_loading %d %d %d' % (cache_count, start_cache, end_cache)
-
-        self.current_cache = start_cache
-        self.start_cache = start_cache
-        self.end_cache = end_cache
-        self.timeline.setRange(self.start_cache, self.end_cache)        
-        self.timeline.setValue( self.current_cache )
-        self.startcache.setText( str(self.start_cache) )
-        self.endcache.setText( str(self.end_cache) )
-
-        self.__block_signals__(True)
-
-    def on_cache_loaded( self, cache, reader ):
-        #print 'PlaybackWidget.on_cache_loaded %d ' % (cache)
-        self.current_cache = cache
-        self.timeline.setValue( self.current_cache )
-        #self.cache_label.setText('Cache: %d' % self.current_cache )
-        self.cache_label.setText( str(self.current_cache) )
-
-    def on_end_cache_loading( self, cache_count, start_cache, end_cache ):
-        self.__block_signals__(False)
-
-    def on_begin_drawcache( self, cache, bFileLoading ):
-        #print '\nPlaybackWidget.on_begin_drawcache %d loading=%d' % (cache,bFileLoading)
-        pass
-        
-    def on_end_drawcache( self, cache, bFileLoading ):
-        #print 'PlaybackWidget.on_end_drawcache %d loading=%d\n' % (cache,bFileLoading)
-        self.current_cache = cache
-        #self.cache_label.setText('Cache: %d' % cache )        
-        self.cache_label.setText( str(self.current_cache) )
-        self.timeline.setValue( self.current_cache )
-        
-    def on_begin_playback( self ):
-        pass
-
-    def on_end_playback( self ):        
-        if self.loop.isChecked() == False:
-            self.playtoggle.setChecked(False)
-            
+    def _on_click_ok( self ):
+        self.accept()
+       
+    def _on_click_cancel( self ):
+        self.reject()
+           

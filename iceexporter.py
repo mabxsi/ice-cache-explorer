@@ -18,75 +18,141 @@
 
 from PyQt4 import QtCore
 from icereader import ICEReader, get_files_from_cache_folder, get_files
-import re
+from process_pool import Pool
+import sys
+import time
 
-class ICEExporter(QtCore.QThread):
-    """ Worker thread for exporting ICE cache data to ascii. """
+class ICEExporter(QtCore.QObject):
+    """ Class to manage processes for exporting ICE cache data to ascii. """
     # string: export file name
     cacheExporting = QtCore.pyqtSignal( str ) 
     # int: number of files to export
     beginCacheExporting = QtCore.pyqtSignal( int ) 
     endCacheExporting = QtCore.pyqtSignal( ) 
 
+    STOP = 0
+    RUN = 1
+    ERROR = 2
+    
     def __init__(self, parent = None):
         super(ICEExporter,self).__init__(parent)
-        self.exiting = False
         self.files = []
-        self.startindex = 1
+        self.state = self.STOP
         self.destination_folder = '.'
+        self.t1 = 0
+        self.t2 = 0
+        self.pool = Pool(self)
         
-    def __del__(self):    
-        self.exiting = True
-        self.wait()
-
     def cancel(self):
-        self.exiting = True
-        self.wait()
+        self.pool.cancel()
 
     def export_folder( self, folder, destination, supported_attributes ):    
-        """ start exporting cache files """
-        self.cancel()
-        self.exiting = False
-        (self.files,self.startindex,end) = get_files_from_cache_folder( folder )
+        """ Export the cache files contained in a folder """
+        (self.files,startindex,end) = get_files_from_cache_folder( folder )
         self.destination_folder = destination
         self.supported_attributes = supported_attributes
-        
-        # kick-off thread
-        self.start()
+        self.state = self.STOP
+        self.files_processed = 0
+        self.t1 = 0
+        self.t2 = 0
+        self._start()
 
     def export_files( self, files, destination, supported_attributes ):    
-        """ start exporting cache files """
-
-        self.cancel()
-        self.exiting = False
-        (self.files,self.startindex,end) = get_files(files)
+        """ Export a list of cache files """
+        (self.files,startindex,end) = get_files(files)
         self.destination_folder = destination
         self.supported_attributes = supported_attributes
+        self.state = self.STOP
+        self.t1 = 0
+        self.t2 = 0
+        self._start()
+       
+    def _start(self):
+        """ Start file export process. """ 
+        self.file_block = 1
+        self.indexset = range( 0, len(self.files), self.file_block ) 
+
+        # Submit export tasks to process pool
+        cpu_count = 1
+        if self.parent():
+            cpu_count = self.parent().prefs.process_count
+        else:
+            import multiprocessing as mp
+            cpu_count = mp.cpu_count() 
+            
+        self.pool.init( cpu_count, self._on_process_callback )
+        self.state = self.STOP
+        file_count = len(self.files)
+        self.files_processed = 0
+        for i in self.indexset:
+            file_list = []
+            for j in range(self.file_block):
+                if i+j < file_count:
+                    file_list.append( self.files[i+j] )                
+            self.pool.submit( ExportTask( [ file_list, self.destination_folder ] ) )
+
+    def _on_process_callback( self, sender, notif, arg ):
+        """ Called when an event occurs from a process """
         
-        # kick-off thread
-        self.start()
+        if notif == Pool.STARTED:
+            if self.state == self.STOP:
+                self.t1 = time.time()
+                self.beginCacheExporting.emit( len(self.files) )
+                self.state = self.RUN
+                
+        elif notif == Pool.ERROR:
+            self.endCacheExporting.emit( )
+            self.state = self.ERROR
+            
+        elif notif == Pool.STATE_CHANGE:
+            pass
+            
+        elif notif == Pool.OUTPUT_MSG:
+            try:      
+                if self.state == self.ERROR:
+                    return
+                s_out = bytes.decode( bytes( sender.readAllStandardOutput() ) )
+                self.cacheExporting.emit( s_out )            
+            except:
+                print '_on_process_output - error: %s' % sys.exc_info()[0]
+                
+        elif notif == Pool.OUTPUT_ERROR:
+            try:            
+                print 'Output error from process %d' % sender.pid()
+            except:
+                print '_on_process_error_output error: %s' % sys.exc_info()[0]
+                
+        elif notif == Pool.FINISHED:
+            try:            
+                if self.state == self.ERROR:
+                    return                
+                self.files_processed += self.file_block
+                if self.files_processed >= len(self.files):
+                    self.t2 = time.time()
+                    self.endCacheExporting.emit( )            
+                    self.state = self.STOP
+                    print 'Export time %0.3f s' % (self.t2-self.t1)
+            except:
+                print '_on_process_finished error: %s' % sys.exc_info()[0]
 
-    def run(self):
-        """ Called by the python when the thread has started. """
-        n = len(self.files)
-        index = self.startindex
-        i = 0
 
-        self.beginCacheExporting.emit( n )
+class ExportTask(object):
+    """ Task to export cache files from a process """
+    def __init__(self,args):        
+        """ 
+        Process arguments:
+        arg0: list of files
+        arg1: target export folder
+        """ 
+        self._cmd = 'python.exe export_process.py "%s" %s' % (repr(args[0]),args[1])
 
-        while not self.exiting and i<n:            
-            reader = ICEReader( self.files[i] )                
-            reader.load( self.supported_attributes )
-            export_filepath = reader.get_export_file_path( self.destination_folder )
+    def __call__(self):
+        """ Returns the process command """
+        return self._cmd
 
-            self.cacheExporting.emit( export_filepath )
-
-            reader.export( export_filepath )
-
-            i += 1
-            index += 1
-            #n -= 1
-
-            del reader
-
-        self.endCacheExporting.emit( )
+def test_export_file():
+    exporter = ICEExporter( ) 
+    exporter.export_files([r'C:\dev\icecache_data\cache50\25.icecache'], r'c:\temp', ())                
+    
+if __name__ == '__main__':
+    test_export_file()

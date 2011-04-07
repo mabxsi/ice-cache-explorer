@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{c6e86e42-d8d9-4762-b829-aa1d5bf4d267}</ProjectGuid>
+    <ProjectHome>.</ProjectHome>
+    <StartupFile>main.py</StartupFile>
+    <SearchPath>
+    </SearchPath>
+    <WorkingDirectory>.</WorkingDirectory>
+    <AssemblyName>iceexplorer</AssemblyName>
+    <Name>iceexplorer</Name>
+    <RootNamespace>iceexplorer</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="basics.py" />
+    <Compile Include="camera.py" />
+    <Compile Include="consts.py" />
+    <Compile Include="export_process.py" />
+    <Compile Include="icedataloader.py" />
+    <Compile Include="iceexplorer.py" />
+    <Compile Include="iceexporter.py" />
+    <Compile Include="iceloader.py" />
+    <Compile Include="icereader.py" />
+    <Compile Include="icereader_util.py" />
+    <Compile Include="iceviewer.py" />
+    <Compile Include="loader_process.py" />
+    <Compile Include="main.py" />
+    <Compile Include="playback.py" />
+    <Compile Include="preferences.py" />
+    <Compile Include="process_pool.py" />
+    <Compile Include="view_tools.py" />
+  </ItemGroup>
+</Project>

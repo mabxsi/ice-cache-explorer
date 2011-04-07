@@ -1,5 +1,5 @@
 ###############################################################################
-# ICE Cache Explorer: A viewer and reader for ICE cache data
+# ICE Explorer: A viewer and reader for ICE cache data
 # Copyright (C) 2010  M.A. Belzile
 # 
 # This program is free software: you can redistribute it and/or modify
@@ -16,22 +16,22 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ###############################################################################
 
-# This is only needed for Python v2 but is harmless for Python v3.
-import sip
-sip.setapi('QString', 2)
+import sys
+from icereader import *
 
-import logging
-logging.basicConfig()
+def main(argv):
+    
+    files = eval(argv[1])
+    exportdir = argv[2]
 
-from PyQt4 import QtCore, QtGui
-from iceexplorer import ICECacheExplorerWindow
-
+    # export input files
+    for f in files:
+        r = ICEReader(f)
+        r.export(exportdir)
+        
+        # send the exported file to process output
+        sys.stdout.write( f )
+        sys.stdout.flush()
+   
 if __name__ == '__main__':
-
-    import sys
-    notice = 'ICE Cache Explorer Copyright (C) 2010  M.A.Belzile'
-    print notice
-    app = QtGui.QApplication(sys.argv)
-    mainWin = ICECacheExplorerWindow()
-    mainWin.show()
-    sys.exit(app.exec_())
+    main(sys.argv)

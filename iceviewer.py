@@ -52,11 +52,7 @@ from view_tools import ToolManager
 from iceloader import ICECacheLoader
 
 import time
-
-# Specify the supported standard ICE attributes
-# Note: The PointPosition___ attribute is always required
-_supported_attributes_ = ('PointPosition___','Color___')
-    
+   
 class ICEViewer(QtOpenGL.QGLWidget):
     """ OpenGL viewer for viewing ICE cache data. """
     # PyQt signal slot functions declaration
@@ -73,6 +69,8 @@ class ICEViewer(QtOpenGL.QGLWidget):
     beginPlayback = QtCore.pyqtSignal(int)
     endPlayback = QtCore.pyqtSignal(int)
 
+    GRID_SIZE = 40
+    
     def __init__(self, parent=None, x=0, y=0, w=640, h=480):      
         super(ICEViewer, self).__init__(parent)
         
@@ -100,14 +98,16 @@ class ICEViewer(QtOpenGL.QGLWidget):
         self.toolmgr = ToolManager(self)
                 
         # Cache loader worker thread
-        self.cache_loader_thread = ICECacheLoader()
-        self.cache_loader_thread.started.connect( self.on_begin_cacheloading )
-        self.cache_loader_thread.cacheLoaded.connect( self.on_cache_loaded )                
-        self.cache_loader_thread.finished.connect( self.on_end_cacheloading )
+        self.cache_loader = ICECacheLoader(parent)
+        self.cache_loader.beginCacheLoading.connect( self.on_begin_cacheloading )
+        self.cache_loader.cacheLoaded.connect( self.on_cache_loaded )                
+        self.cache_loader.endCacheLoading.connect( self.on_end_cacheloading )
 
         self.setAcceptDrops( True )                    
         self.setFocusPolicy( QtCore.Qt.StrongFocus )    
-    
+
+        self.__create_grid_data__( self.GRID_SIZE )
+
     def __del__(self):
         self.__stop_playback_timer__( )
 
@@ -124,7 +124,7 @@ class ICEViewer(QtOpenGL.QGLWidget):
     def stop_loading(self):
         """ cancel current loading job """
         self.__stop_playback__()
-        self.cache_loader_thread.cancel()
+        self.cache_loader.cancel()
         
     def load_files( self, files ):
         """ Load one or multiple cache files. """
@@ -196,7 +196,7 @@ class ICEViewer(QtOpenGL.QGLWidget):
         
         # start loading the file caches
         self.load_start_time = time.clock()
-        self.cache_loader_thread.load_cache_files( files, startcache, endcache, _supported_attributes_ )        
+        self.cache_loader.load_cache_files( files, startcache, endcache )        
 
     def __start_playback__(self):
         """ Enables a timer to start the playback. The OGL view gets updated when the timer is triggered. """            
@@ -268,8 +268,9 @@ class ICEViewer(QtOpenGL.QGLWidget):
     def on_cache_loaded(self, cacheindex, data ):
         """ Called by the ICECacheLoader thread for every file loaded """
         self.current_cache = cacheindex
-        (reader, points, colors, sizes) = data
+        (filename, points, colors, sizes) = data
 
+        #print 'cacheindex %d' % cacheindex
         if len(points):
             self.point_arrays[cacheindex] = points
         if len(colors):
@@ -278,7 +279,7 @@ class ICEViewer(QtOpenGL.QGLWidget):
             self.size_arrays[cacheindex] = sizes
 
         # re-emit to viewer clients
-        self.cacheLoaded.emit( cacheindex, reader )        
+        self.cacheLoaded.emit( cacheindex, filename )        
         self._updateGL()
 
     # widget callbacks
@@ -420,23 +421,21 @@ class ICEViewer(QtOpenGL.QGLWidget):
         # Update the camera lookup
         self.camera.draw()
         
-        # grid
-        # todo: use a drawlist
+        # grid        
+        glLineWidth(1.0)
+        glEnableClientState(GL_VERTEX_ARRAY)        
         glPushMatrix()
-        glTranslate( 20, 0, 20 )
-        glBegin(GL_LINES) 
+        glTranslate( self.GRID_SIZE/2, 0, self.GRID_SIZE/2 )
         glColor3f( .5, .5, .5 )
-        for i in range(41):
-            glVertex3f(-40, 0, -40 + i)
-            glVertex3f( 0, 0, -40 + i)
-            glVertex3f(-40 + i, 0, -40 )
-            glVertex3f(-40 + i, 0,  0 )
-        glEnd()
+        glVertexPointerd( self.grid_array )
+        glDrawArrays(GL_LINES, 0, len(self.grid_array))
         glPopMatrix()
+        glDisableClientState(GL_VERTEX_ARRAY)
         
         # coord system
         # todo: use a drawlist
         glPushMatrix()
+        glLineWidth(2.0)
         glBegin(GL_LINES) 
         glColor3f( 1.0, 0.0, 0.0 )
         glVertex3f(0, 0, 0)
@@ -484,6 +483,15 @@ class ICEViewer(QtOpenGL.QGLWidget):
             glPopMatrix()
 
         self.endDrawCache.emit( self.current_cache, self.cache_loading )
+
+    def __create_grid_data__(self, size ):
+        self.grid_array = numpy.zeros( ((size+1)*4,3), numpy.float64 )
+        
+        for i in range( size+1 ):
+            self.grid_array[i*4+0] = [-size, 0, -size + i]
+            self.grid_array[i*4+1] = [0, 0, -size + i]
+            self.grid_array[i*4+2] = [-size + i, 0, -size]
+            self.grid_array[i*4+3] = [-size + i, 0, 0]
 
     def timerEvent( self, event ):
         """ render the current cache """                

@@ -477,6 +477,9 @@ def objtype_to_string( type ):
     except:
         # unknown
         return str(type)
+
+def printf( format, *args ):
+    sys.stdout.write(format % args )
     
 def report_error( msg, sysexc ):
     print 'EXCEPTION %s : %s' % (sysexc[0],sysexc[1])

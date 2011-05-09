@@ -18,7 +18,7 @@
 
 from PyQt4 import QtCore, QtGui
 import multiprocessing as mp
-import ui_preferences
+import ui_prefs
 import sys,os
 
 _default_export_folder = r'c:\temp'
@@ -30,7 +30,7 @@ class ICEPreferences( QtGui.QDialog ):
     def __init__( self, parent=None ):
         super( ICEPreferences, self).__init__(parent)
         self.setWindowTitle("Preferences")
-        self.ui = ui_preferences.Ui_Preferences()
+        self.ui = ui_prefs.Ui_Preferences()
         self.ui.setupUi( self )        
         self.ui.process_count_edit.setText( str(mp.cpu_count()) )
         self.ui.export_folder_edit.setText( _default_export_folder )

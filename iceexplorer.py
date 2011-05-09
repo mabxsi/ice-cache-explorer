@@ -32,7 +32,7 @@ from preferences import *
 import sys
 
 # (major,minor,micro,label,serial)
-__version__ = (1, 0, 0, 'beta', 0)
+__version__ = (1, 0, 0, 'beta 2', 0)
 __author__ = 'mab'
 
 class ICECacheExplorerWindow(QtGui.QMainWindow):
@@ -65,8 +65,6 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         self.exporter.cacheExporting.connect(self._on_cache_exporting)
         self.exporter.beginCacheExporting.connect(self._on_begin_cache_exporting)
         self.exporter.endCacheExporting.connect(self._on_end_cache_exporting)
-
-        #self.export_dialog = ICEExporterDialog( self.exporter, self )
         
         # create object responsible for loading attributes data in the browser
         self.data_loader = ICEDataLoader(self)        

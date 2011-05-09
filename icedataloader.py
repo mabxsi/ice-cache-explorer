@@ -1,5 +1,5 @@
 ###############################################################################
-# ICE Cache Explorer: A viewer and reader for ICE cache data
+# ICE Explorer: A viewer and reader for ICE cache data
 # Copyright (C) 2010  M.A. Belzile
 # 
 # This program is free software: you can redistribute it and/or modify
@@ -18,30 +18,31 @@
 
 from PyQt4 import QtCore, QtGui
 import numpy
-from icereader import ICEReader
+from h5reader import H5Reader
 
 class ICEDataLoader(QtCore.QThread):
     """ Worker thread for loading ICE cache data. """
     # signals
-    # string: cache name
     # string: attribute name
     # int: num values
-    beginCacheDataLoading = QtCore.pyqtSignal( str, str, int ) 
+    beginCacheDataLoading = QtCore.pyqtSignal( str, int ) 
     endCacheDataLoading = QtCore.pyqtSignal( ) 
     cacheDataLoaded = QtCore.pyqtSignal( ) 
 
     def __init__(self, parent = None):
         super(ICEDataLoader,self).__init__(parent)
         self.exiting = False
-        self.treeitem = None
+        self.treeitem = None        
+        self.h5_obj = None
         
     def __del__(self):    
         self.exiting = True
         self.wait()
 
-    def load( self, treeitem ):    
+    def load( self, loader, treeitem ):    
         """ start loading the icecache data """
         self.treeitem = treeitem
+        self.h5_obj = loader
         
         # kick-off thread
         self.start()
@@ -56,22 +57,30 @@ class ICEDataLoader(QtCore.QThread):
                 raise Exception('Unexpected data item ')
                 return 
             
-            filename,cache_name = var.toStringList()
- 
+            #filename,cache_name = var.toStringList() 
             attrib_name  = item.parent().text(1)
 
-            reader = ICEReader( filename )
-            reader.load( )
+            reader = H5Reader( self.h5_obj )
             
-            values = []
-            if attrib_name in reader._data:
-                values = reader[ attrib_name ]
-                #update <attrib_name>.isconstant value
-                isconst_item = item.parent().child(8)
-                isconst_item.setText(1, str(reader.find_attribute( attrib_name ).isconstant) )
+            try:
+                reader.load( )
+            except:
+                raise Exception('Error loading data')
+                return
+            
+            attrib = reader.find_attribute( attrib_name )
+            
+            if attrib == None:
+                raise Exception('Unexpected attribute')
+                return 
+                       
+            values = attrib.data[:]
+            #update <attrib_name>.isconstant value
+            isconst_item = item.parent().child(8)
+            isconst_item.setText(1, str(attrib['isconstant']) )
                         
             item.takeChild(0)
-            self.beginCacheDataLoading.emit( cache_name, item.parent().text(1), len(values) )
+            self.beginCacheDataLoading.emit( attrib_name, len(values) )
 
             for i,val in enumerate(values):
                 value = QtGui.QTreeWidgetItem( item )
@@ -83,27 +92,6 @@ class ICEDataLoader(QtCore.QThread):
             item.setData(0,QtCore.Qt.UserRole,None)
             self.endCacheDataLoading.emit( )                    
     
-    def _load_attribute_data( self, cache_name, attrib_item, cacheindex ):
-            values = []
-            try:
-                # get the attribute data from the viewer
-                values = self.viewer.get_data( attrib_item.text(1), cacheindex )
-            except:
-                pass
-
-            self.beginCacheDataLoading.emit( cache_name, attrib_item.text(1), len(values) )
-
-            nCount = attrib_item.childCount()
-            dataitem = attrib_item.child( nCount -1 )
-            for i,val in enumerate(values):
-                value = QtGui.QTreeWidgetItem( dataitem )
-                value.setText( 0, str(i) )
-                # use numpy array string conversion
-                value.setText( 1, numpy.array_str(val,precision=6) )        
-                self.cacheDataLoaded.emit( )
-            
-            self.endCacheDataLoading.emit( )
-
     def run(self):
         """ Called by the python when the thread has started. """
         

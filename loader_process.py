@@ -23,7 +23,10 @@ import pickle
 import sys
 import numpy as np
 import struct
-from icereader import *
+import icereader as icer
+import h5reader as h5r
+from consts import CONSTS
+import os
 
 PACKET_LEN = struct.calcsize('L')  # 4 bytes
 SERVER = 'ICE-CACHE-LOADER'
@@ -32,99 +35,36 @@ TIMEOUT = 5000
 
 theApp = QtCore.QCoreApplication(sys.argv)
 
-def load_data_from_file( filename, index ):                        
-    """ create a reader lo load acache file and returns the data read. """
-    reader = ICEReader( filename )    
-    try:
-        reader.load( )
-    except:
-        # something is wrong, probably a bad file format 
-        return ( None, filename, [], [], [] )
+def handle_file( filename, index ):                        
+    """ cache file handling. """
+    if h5r.is_valid_file( filename ):
+        # SIH5 file: nothing to do, the file will be loaded later
+        return ( index, filename )
 
-    points = []
-    colors = []
-    sizes = []
-    
-    # Support these parameters only for now        
-    if 'PointPosition___' in reader._data:
-        points = reader[ 'PointPosition___' ]
-    if 'Color___' in reader._data:
-        if len(reader[ 'Color___' ]):
-            colors = reader[ 'Color___' ]
-    if 'Size___' in reader._data:
-        if len(reader[ 'Size___' ]):
-            sizes = reader[ 'Size' ]
-    
-    return ( index, filename, points, colors, sizes )
+    if icer.is_valid_file( filename ):        
+        # load .icecache and save to SIH5 folder
+        data_folder = os.path.join( os.path.dirname( filename ), '.sih5' )
+        if not os.path.exists( data_folder ):
+            os.mkdir( data_folder, 777 )
+
+        # export only if file doesn't exist
+        reader = icer.ICEReader( filename )
+        reader.export( data_folder, CONSTS.SIH5_FMT, force = False )
+        return ( index, reader.export_filename )
+
+    # unsupported file format 
+    return ( None, None )    
 
 def main(argv):
     
     files = eval(argv[1])
     indices = eval(argv[2])
 
-    # export input files
     for i,f in enumerate(files):
-        data = load_data_from_file( f, indices[i] )
+        data = handle_file( f, indices[i] )
 
-        socket = QtNetwork.QLocalSocket(theApp)
-        if socket == None:
-            sys.stderr.write("Error creating socket")
-            sys.stderr.flush()        
-            return 
-    
-        socket.connectToServer(SERVER)
-        if not socket.waitForConnected(TIMEOUT):
-            sys.stderr.write( 'Process error server connection: %s\n' % socket.errorString() )
-            sys.stderr.flush()        
-            return 
-
-        # request the server to allocate memory of size data_bytes_count
-        data_bytes = pickle.dumps( data, 2)
-        data_bytes_len = len(data_bytes)        
-        req_bytes = pickle.dumps( [f, data_bytes_len], 2)
-        req_bytes_len = len(req_bytes)
-        
-        socket.write(struct.pack('L',req_bytes_len))
-        if not socket.waitForBytesWritten(TIMEOUT):
-            sys.stderr.write('Process error while waiting for request byte length to be written: %s\n' % socket.errorString() )
-            sys.stderr.flush()
-            return
-
-        socket.write(req_bytes)
-        if not socket.waitForBytesWritten(TIMEOUT):
-            sys.stderr.write('Process error while waiting for request bytes to be written: %s\n' % socket.errorString() )
-            sys.stderr.flush()
-            return
-
-        if not socket.waitForReadyRead(TIMEOUT):
-            sys.stderr.write('Process error while waiting for acknowledge: %s\n' % socket.errorString() )
-            sys.stderr.flush()
-            return
-
-        ack = socket.readLine()
-        
-        socket.disconnectFromServer()
-        del socket
-
-        # get the shared memory segment
-        shmem = QtCore.QSharedMemory( f )
-    
-        if not shmem.isAttached() and not shmem.attach():
-            sys.stderr.write('Process error shared memory access: %s\n' % str(sys.exc_info()[1]) )
-            sys.stderr.flush()        
-            return             
-            
-        shmem.lock()
-        try:
-            CLIB.memcpy(int(shmem.data()), data_bytes, data_bytes_len)
-        except:
-            sys.stderr.write('Process error copying bytes to shared memory: %s\n' % str(sys.exc_info()[1]) )
-            sys.stderr.flush()            
-        finally:
-            shmem.unlock()
-        
-        # signal server we are done with this file 
-        sys.stdout.write( f )
+        # tell process about the new file
+        sys.stdout.write( str(data) )
         sys.stdout.flush()  
    
 if __name__ == '__main__':

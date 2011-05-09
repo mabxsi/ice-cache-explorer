@@ -1,5 +1,5 @@
 ###############################################################################
-# ICE Cache Explorer: A viewer and reader for ICE cache data
+# ICE Explorer: A viewer and reader for ICE cache data
 # Copyright (C) 2010  M.A. Belzile
 # 
 # This program is free software: you can redistribute it and/or modify
@@ -19,12 +19,14 @@
 from PyQt4 import QtCore, QtGui
 
 from iceviewer import ICEViewer
-from icereader import get_files_from_cache_folder, ICEReader
+from icereader import ICEReader
+from icereader_util import get_files_from_cache_folder
 from iceexporter import ICEExporter
 from icedataloader import ICEDataLoader
 from playback import PlaybackWidget
 from consts import CONSTS
 from icereader_util import *
+from h5reader import H5Reader
 from preferences import *
 
 import sys
@@ -64,6 +66,8 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         self.exporter.beginCacheExporting.connect(self._on_begin_cache_exporting)
         self.exporter.endCacheExporting.connect(self._on_end_cache_exporting)
 
+        #self.export_dialog = ICEExporterDialog( self.exporter, self )
+        
         # create object responsible for loading attributes data in the browser
         self.data_loader = ICEDataLoader(self)        
         self.data_loader.cacheDataLoaded.connect(self._on_cache_data_loaded)
@@ -76,6 +80,7 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         self._create_dock_windows()
                 
         self.current_job = None
+        self._cache_files = []
                 
     def _load_cache_folder(self):
         """ Load cache folder from a directory dialog """
@@ -95,7 +100,7 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         """ Load cache file from a file dialog """
         self.statusBar().clearMessage()
         
-        fileDialog = QtGui.QFileDialog(self, caption="Select ICECache File(s) To Load", directory=".", filter="ICECACHE (*.icecache)")
+        fileDialog = QtGui.QFileDialog(self, caption="Select ICECache File(s) To Load", directory=".", filter="ICECACHE (*.icecache *.sih5)")
         fileDialog.setFileMode(QtGui.QFileDialog.ExistingFiles)
         fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptOpen)
         if not fileDialog.exec_():
@@ -103,26 +108,41 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         
         self.viewer.load_files(fileDialog.selectedFiles())
 
-    def _export_cache_folder(self):
-        """ Export all cache files from dir to ascii """
+    def _export_to_text(self):
+        """ Select folder cache and export cache files to text """
+        self.exporter.folder_dialog.open( CONSTS.TEXT_FMT )
+
+    def _export_to_sih5(self):
+        """ Select folder cache and export cache files to SIH5"""
+        self.exporter.folder_dialog.open( CONSTS.SIH5_FMT )
+    
+    def _export_all_to_text(self):
+        """ Export all cache files to text """
         self.statusBar().clearMessage()
-        folder = QtGui.QFileDialog.getExistingDirectory(self, "Select ICECache Folder To Export", ".", QtGui.QFileDialog.ShowDirsOnly)
+        self.exporter.file_dialog.open( self._cache_files, CONSTS.TEXT_FMT )
+
+        """
+        folder = QtGui.QFileDialog.getExistingDirectory(self, "Select Destination Folder to Export ICECache Files", self.prefs.export_folder, QtGui.QFileDialog.ShowDirsOnly)
         if not folder:
             return
 
-        self.exporter.export_folder(folder, self.prefs.export_folder, ('Color___', 'Size___'))
+        self.exporter.export_files( self._cache_files, folder, fmt=CONSTS.TEXT_FMT )
+        """
         
-    def _export_cache(self):
-        """ Export a selected icecache to ascii """
+    def _export_all_to_sih5(self):
+        """ Export all cache files to SIH5 """
         self.statusBar().clearMessage()
-        fileDialog = QtGui.QFileDialog(self, caption="Select ICECache File(s) To Export", directory=".", filter="ICECACHE (*.icecache)")
-        fileDialog.setFileMode(QtGui.QFileDialog.ExistingFiles)
-        fileDialog.setAcceptMode(QtGui.QFileDialog.AcceptOpen)
-        if not fileDialog.exec_():
+        self.exporter.file_dialog.open( self._cache_files, CONSTS.SIH5_FMT )
+        
+        """
+        self.statusBar().clearMessage()
+        folder = QtGui.QFileDialog.getExistingDirectory(self, "Select Destination Folder to Export SIH5 Files", self.prefs.export_folder, QtGui.QFileDialog.ShowDirsOnly)
+        if not folder:
             return
         
-        self.exporter.export_files(fileDialog.selectedFiles(), self.prefs.export_folder, ('Color___', 'Size___'))
-
+        self.exporter.export_files( self._cache_files, folder, fmt=CONSTS.SIH5_FMT )
+        """
+        
     def preferences(self):
         self.prefs.exec_()
 
@@ -130,14 +150,11 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         sys.exit()
 
     # Internals
-    def _load_cache_data(self):
-        """ start worker thread to load the attribute(s) data """
-        self.data_loader.load(self.treeWidget, self.viewer)
 
     # slots for the export job
     def _on_begin_cache_exporting(self, num ):
         self.current_job = self.EXPORT
-        self.cancel_current_job_act.setDisabled(False)
+        self.cancel_current_job_act.setDisabled (False)
         self._start_progressbar(num,'Exporting...')
 
     def _on_cache_exporting(self, export_file):
@@ -150,8 +167,8 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         self._stop_progressbar()
 
     # slots for the cache data load job
-    def _on_begin_cache_data_loading(self, cache_name, cache_attrib, num ):
-        self._start_progressbar( num, 'Loading data: <%s.%s>' % (cache_name, cache_attrib) )
+    def _on_begin_cache_data_loading(self, cache_attrib, num ):
+        self._start_progressbar( num, 'Loading data: %s' % (cache_attrib) )
 
     def _on_cache_data_loaded(self ):
         self._update_progressbar()
@@ -163,6 +180,7 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
     def _on_begin_cache_loading(self, count, start, end ):
         self.current_job = self.LOAD
         self.treeWidget.clear()
+        self._cache_files = []
         self.cancel_current_job_act.setDisabled(False)
         self._start_progressbar( count, 'Loading Cache Files ...'  )
                 
@@ -179,12 +197,14 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
 
         self._update_progressbar()
 
-        # Creates top level items only, rest will be filled when items get expanded
+        self._cache_files.append( filename )
+        
+        # Creates browser top level items only, rest will be filled when items get expanded
         # cache item
         itemcache = QtGui.QTreeWidgetItem(self.treeWidget)
         itemcache.setText(0, 'Cache %d' % (cacheindex))
-        fnameVar = QtCore.QVariant(filename)
-        itemcache.setData(0, QtCore.Qt.UserRole, fnameVar)
+        indexVar = QtCore.QVariant(cacheindex)
+        itemcache.setData(0, QtCore.Qt.UserRole, indexVar)
         self.treeWidget.addTopLevelItem(itemcache)
         
         # header item
@@ -203,9 +223,12 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         """ All actions required by the GUI components """
         self.load_cache_folder_act = QtGui.QAction(QtGui.QIcon(r'./resources/load-cache-folder.png'), "&Load Cache Folder...", self, statusTip="Load Cache Folder", triggered=self._load_cache_folder)
         self.load_cache_act = QtGui.QAction(QtGui.QIcon(r'./resources/load-cache-file.png'), "Load Cache &File(s)...", self, statusTip="Load Cache File(s)", triggered=self._load_cache)
-        self.export_cache_act = QtGui.QAction(QtGui.QIcon(r'./resources/export-cache.png'), "Export &Cache File(s)...", self, statusTip="Export Cache File(s)", triggered=self._export_cache)
-        self.export_selected_cache_act = QtGui.QAction(QtGui.QIcon(r'./resources/export-cache.png'), "Export &Cache File", self, statusTip="Export Cache")
-        self.export_cache_folder_act = QtGui.QAction(QtGui.QIcon(r'./resources/export-cache-folder.png'), "Export &Cache Folder...", self, statusTip="Export Cache Folder", triggered=self._export_cache_folder)
+        self.export_all_caches_to_text_act = QtGui.QAction(QtGui.QIcon(r'./resources/export-cache.png'), "Export Caches to &Text", self, statusTip="Export Caches To Text", triggered=self._export_all_to_text)
+        self.export_all_caches_to_sih5_act = QtGui.QAction(QtGui.QIcon(r'./resources/export-cache.png'), "Export Caches to &SIH5", self, statusTip="Export Caches To SIH5", triggered=self._export_all_to_sih5)
+        self.export_caches_to_text_act = QtGui.QAction(QtGui.QIcon(r'./resources/export-cache-folder.png'), "Export Folder to &Text", self, statusTip="Export Folder To Text", triggered=self._export_to_text)
+        self.export_caches_to_sih5_act = QtGui.QAction(QtGui.QIcon(r'./resources/export-cache-folder.png'), "Export Folder to &SIH5", self, statusTip="Export Folder To SIH5", triggered=self._export_to_sih5)
+        self.export_selected_cache_to_text_act = QtGui.QAction(QtGui.QIcon(r'./resources/export-cache.png'), "Export Selected Cache To &Text", self, statusTip="Export To Text")
+        self.export_selected_cache_to_sih5_act = QtGui.QAction(QtGui.QIcon(r'./resources/export-cache.png'), "Export Selected Cache To &SIH5", self, statusTip="Export To SIH5")
         self.cancel_current_job_act = QtGui.QAction(QtGui.QIcon(r'./resources/cancel_loading.png'), "Cancel", self, statusTip="Cancel", triggered=self._cancel_current_job)
         self.cancel_current_job_act.setDisabled(True)
         
@@ -228,11 +251,14 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         self.fileMenu = self.menuBar().addMenu("&File")        
         self.fileMenu.setStyleSheet(CONSTS.SS_MENU)
  
-        self.fileMenu.addAction(self.load_cache_act)
         self.fileMenu.addAction(self.load_cache_folder_act)
+        self.fileMenu.addAction(self.load_cache_act)
         self.fileMenu.addSeparator()
-        self.fileMenu.addAction(self.export_cache_act)
-        self.fileMenu.addAction(self.export_cache_folder_act)
+        self.fileMenu.addAction(self.export_caches_to_text_act)
+        self.fileMenu.addAction(self.export_caches_to_sih5_act)
+        self.fileMenu.addSeparator()
+        self.fileMenu.addAction(self.export_all_caches_to_text_act)
+        self.fileMenu.addAction(self.export_all_caches_to_sih5_act)
         self.fileMenu.addAction(self.cancel_current_job_act)
         self.fileMenu.addSeparator()        
         self.fileMenu.addAction(self.cancel_current_job_act)
@@ -253,9 +279,6 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         self.fileToolBar = QtGui.QToolBar( "File" )
         self.fileToolBar.addAction(self.load_cache_folder_act)
         self.fileToolBar.addAction(self.load_cache_act)
-        self.fileToolBar.addSeparator()
-        self.fileToolBar.addAction(self.export_cache_folder_act)
-        self.fileToolBar.addAction(self.export_cache_act)
         self.fileToolBar.addSeparator()
         self.fileToolBar.addAction(self.cancel_current_job_act)
         self.addToolBar( QtCore.Qt.LeftToolBarArea, self.fileToolBar )
@@ -305,7 +328,8 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         # ... browser context menus
         self._browser_contextmenu = QtGui.QMenu(self)
         self._browser_contextmenu.setStyleSheet(CONSTS.SS_MENU)
-        self._browser_contextmenu.addAction(self.export_selected_cache_act)
+        self._browser_contextmenu.addAction(self.export_selected_cache_to_text_act)
+        self._browser_contextmenu.addAction(self.export_selected_cache_to_sih5_act)
         self.attribute_contextmenu = QtGui.QMenu(self)
         self.attribute_contextmenu.setStyleSheet(CONSTS.SS_MENU)
         dock.setWidget(self.treeWidget)        
@@ -326,27 +350,27 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         if var == None:
             # nothing to do
             return
-
-        if item.text(0) == 'Data':
-            self.data_loader.load(item)            
-            return
         
         #Fill this item with cache attributes
-        filename = var.toString()        
+        (cacheindex,flag) = var.toInt()
+        h5cache = self.viewer.cache[ cacheindex ]
+        
+        if item.text(0) == 'Data':
+            self.data_loader.load(h5cache,item)                  
+            return
 
         #done with the user data
         item.setData(0, QtCore.Qt.UserRole, None)
 
-        reader = ICEReader( filename )
-        reader.read_header()
-        reader.read_attributes_desc()
+        reader = H5Reader( h5cache )
+        reader.load()
         
         # Cache
         #    > Header
         #         <header items>
         headeritem = item.child(0)
         headeritem.setText(0, 'Header')
-        headeritem.setText(1, reader.header().name)
+        headeritem.setText(1, reader.header['name'])
         
         version = QtGui.QTreeWidgetItem(headeritem)
         type = QtGui.QTreeWidgetItem(headeritem)
@@ -358,21 +382,21 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         attribute_count = QtGui.QTreeWidgetItem(headeritem)
 
         version.setText(0, 'Version')
-        version.setText(1, str(reader.header().version))
+        version.setText(1, str(reader.header['version']))
         type.setText(0, 'Type')
-        type.setText(1, objtype_to_string(reader.header().type))
+        type.setText(1, objtype_to_string(reader.header['type']))
         particle_count.setText(0, 'Particle Count')
-        particle_count.setText(1, str(reader.header().particle_count))
+        particle_count.setText(1, str(reader.header['particle_count']))
         edge_count.setText(0, 'Edge Count')
-        edge_count.setText(1, str(reader.header().edge_count))
+        edge_count.setText(1, str(reader.header['edge_count']))
         polygon_count.setText(0, 'Polygon Count')
-        polygon_count.setText(1, str(reader.header().polygon_count))
+        polygon_count.setText(1, str(reader.header['polygon_count']))
         sample_count.setText(0, 'Sample Count')
-        sample_count.setText(1, str(reader.header().sample_count))
+        sample_count.setText(1, str(reader.header['sample_count']))
         blob_count.setText(0, 'Blob Count')
-        blob_count.setText(1, str(reader.header().blob_count))
+        blob_count.setText(1, str(reader.header['blob_count']))
         attribute_count.setText(0, 'Attribute Count')
-        attribute_count.setText(1, str(reader.header().attribute_count))                
+        attribute_count.setText(1, str(reader.header['attribute_count']))
 
         # attribute items
         # Cache
@@ -380,12 +404,11 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         #         <header items>
         #    > Attribute <name>
         #         <attribute items>        
-        
-        attribs = reader.attributes()        
-        for attrib in attribs:
+
+        for attrib in reader.attributes:
             attribitem = QtGui.QTreeWidgetItem(item)
             attribitem.setText(0, 'Attribute')
-            attribitem.setText(1, attrib.name)
+            attribitem.setText(1, attrib['name'] )
 
             # attribute description
             datatype = QtGui.QTreeWidgetItem(attribitem)
@@ -400,35 +423,35 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
             dataitem = QtGui.QTreeWidgetItem(attribitem)
 
             datatype.setText(0, 'Data Type')
-            datatype.setText(1, datatype_to_string(attrib.datatype))
+            datatype.setText(1, datatype_to_string(attrib['datatype']))
             structtype.setText(0, 'Structure Type')
-            structtype.setText(1, structtype_to_string(attrib.structtype))
+            structtype.setText(1, structtype_to_string(attrib['structtype']))
             contexttype.setText(0, 'Context Type')
-            contexttype.setText(1, contexttype_to_string(attrib.contexttype))
+            contexttype.setText(1, contexttype_to_string(attrib['contexttype']))
             objid.setText(0, 'Object ID')
-            objid.setText(1, str(attrib.objid))
+            objid.setText(1, str(attrib['objid']))
             category.setText(0, 'Category')
-            category.setText(1, categorytype_to_string(attrib.category))
+            category.setText(1, categorytype_to_string(attrib['category']))
             ptlocator_size.setText(0, 'PointLocator Size')
-            ptlocator_size.setText(1, str(attrib.ptlocator_size))
+            ptlocator_size.setText(1, str(attrib['ptlocator_size']))
             blobtype_count.setText(0, 'Blob Type Count')
-            blobtype_count.setText(1, str(attrib.blobtype_count))
+            blobtype_count.setText(1, str(attrib['blobtype_count']))
             blobtype_names.setText(0, 'Blob Type Name')
-            blobtype_names.setText(1, str(attrib.blobtype_names))
+            blobtype_names.setText(1, str(attrib['blobtype_names']))
             # will be filled when the data gets loaded by the user
             isconstant.setText(0, 'Constant Data')            
             isconstant.setText(1, '')
             
             # attribute data items, empty for now
             # Cache
-            #    > Header
+            #    > Header 
             #         <header items>
             #    > Attribute <name>
             #         <attribute items>        
             #         > Data
             #              <values>
             dataitem.setText(0, 'Data')
-            var = QtCore.QVariant([filename,item.text(0)])
+            var = QtCore.QVariant(cacheindex)
             dataitem.setData(0, QtCore.Qt.UserRole, var )            
 
             # add dummy value so data item can get filled with values when it get expanded
@@ -436,21 +459,27 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
             emptyvalue.setText( 0, '' )
 
     def _handle_browser_contextmenu(self, point):
-        """ Context menus for exporting individual cache files"""
+        """ Context menus for  exporting individual cache files"""
         item = self.treeWidget.currentItem() 
         
         # show browser context menu on the widget
-        if item.parent() != None and item.text(0) != 'Attribute':
+        if item.parent() != None:
+            # context menu supported on the top level item only
             return
         
-        if item.text(0) == 'Attribute':
-            self.attribute_contextmenu.exec_(self.treeWidget.mapToGlobal(point))
+        action = self._browser_contextmenu.exec_(self.treeWidget.mapToGlobal(point))
+        var = item.data(0, QtCore.Qt.UserRole)
+        (cache_index,flag) = var.toInt()
+        fmt=None
+        if action == self.export_selected_cache_to_text_act:
+            fmt = CONSTS.TEXT_FMT
+        elif action == self.export_selected_cache_to_sih5_act:                
+            fmt = CONSTS.SIH5_FMT
         else:
-            action = self._browser_contextmenu.exec_(self.treeWidget.mapToGlobal(point))
-            if action == self.export_selected_cache_act:
-                var = item.data(0, QtCore.Qt.UserRole)
-                filename = var.toString()
-                self.exporter.export_files([filename], self.prefs.export_folder, ())                
+            return
+        
+        h5cache = self.viewer.cache[ cache_index ]
+        self.exporter.export_files( [h5cache.filename], self.prefs.export_folder, fmt)                
 
     # Progress bar helpers
     def _start_progressbar(self,num,msg=''):        

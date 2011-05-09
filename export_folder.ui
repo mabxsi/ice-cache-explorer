@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ExportFolder</class>
+ <widget class="QDialog" name="ExportFolder">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>325</width>
+    <height>185</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Export Cache Folder</string>
+  </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>resources/export-cache-folder.png</normaloff>resources/export-cache-folder.png</iconset>
+  </property>
+  <widget class="QDialogButtonBox" name="ExportButton">
+   <property name="geometry">
+    <rect>
+     <x>80</x>
+     <y>140</y>
+     <width>171</width>
+     <height>32</height>
+    </rect>
+   </property>
+   <property name="orientation">
+    <enum>Qt::Horizontal</enum>
+   </property>
+   <property name="standardButtons">
+    <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+   </property>
+   <property name="centerButtons">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QGroupBox" name="src">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>20</y>
+     <width>301</width>
+     <height>51</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Source Folder</string>
+   </property>
+   <widget class="QPushButton" name="src_folder_btn">
+    <property name="geometry">
+     <rect>
+      <x>270</x>
+      <y>20</y>
+      <width>21</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>...</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="src_folder_edit">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>20</y>
+      <width>241</width>
+      <height>20</height>
+     </rect>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QGroupBox" name="dest">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>80</y>
+     <width>301</width>
+     <height>51</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Destination Folder</string>
+   </property>
+   <widget class="QPushButton" name="dst_folder_btn">
+    <property name="geometry">
+     <rect>
+      <x>270</x>
+      <y>20</y>
+      <width>21</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>...</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="dst_folder_edit">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>20</y>
+      <width>241</width>
+      <height>20</height>
+     </rect>
+    </property>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>ExportButton</sender>
+   <signal>accepted()</signal>
+   <receiver>ExportFolder</receiver>
+   <slot>accept()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>248</x>
+     <y>254</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>157</x>
+     <y>274</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>ExportButton</sender>
+   <signal>rejected()</signal>
+   <receiver>ExportFolder</receiver>
+   <slot>reject()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>316</x>
+     <y>260</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>286</x>
+     <y>274</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>

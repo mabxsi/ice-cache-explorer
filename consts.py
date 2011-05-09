@@ -1,5 +1,5 @@
 ###############################################################################
-# ICE Cache Explorer: A viewer and reader for ICE cache data
+# ICE Explorer: A viewer and reader for ICE cache data
 # Copyright (C) 2010  M.A. Belzile
 # 
 # This program is free software: you can redistribute it and/or modify
@@ -121,3 +121,9 @@ class CONSTS:
          }"        
 
     SS_BACKGROUND = "QWidget { background-color: rgb(204,204,204) }"
+
+    # export format 
+    TEXT_FMT = 0
+    SIH5_FMT = 1
+    ICECACHE_FMT = 2
+    

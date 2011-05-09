@@ -1,5 +1,5 @@
 ###############################################################################
-# ICE Cache Explorer: A viewer and reader for ICE cache data
+# ICE Explorer: A viewer and reader for ICE cache data
 # Copyright (C) 2010  M.A. Belzile
 # 
 # This program is free software: you can redistribute it and/or modify

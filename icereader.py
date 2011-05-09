@@ -1,5 +1,5 @@
 ###############################################################################
-# ICE Cache Explorer: A viewer and reader for ICE cache data
+# ICE Explorer: A viewer and reader for ICE cache data
 # Copyright (C) 2010  M.A. Belzile
 # 
 # This program is free software: you can redistribute it and/or modify
@@ -19,8 +19,6 @@
 import sys
 import os
 import gzip
-import struct
-import re
 from consts import CONSTS
 from icereader_util import *
 
@@ -29,24 +27,34 @@ try:
 except:
     print "ERROR: numpy not installed properly."
     sys.exit()
-   
+
+try:
+    import h5py as h5
+except:
+    print "ERROR: h5py not installed properly."
+    h5 = None
+
 """
 import gc
  gc.set_debug(gc.DEBUG_LEAK)
 """
 
 class ICEReader(object):    
+    """ ICE cache reader/exporter """
+    
     def __init__(self,filename):
         """ open file and store the file pointer """
         self._filename = filename
         self._header = None
         self._attributes = None
         self._data = {}
+        self._export_filename = None
+        
         file = None
         try:
             file = gzip.open( self._filename, 'rb+' )
         except:
-            print 'Error - Invalid file: %s' % filename
+            raise Exception('Error - Invalid file: %s' % filename )
                                
         self.handler = ICECacheFileHandler( file )
 
@@ -56,15 +64,32 @@ class ICEReader(object):
         self._data = {}
         self.handler = None
 
+    def __getitem__( self, arg ):
+        """ return data buffer by name """
+        return self._data[ arg ]
+
+    @property
     def filename(self):
         return self._filename
-        
+
+    @property
+    def export_filename(self):
+        return self._export_filename
+
+    @property
+    def header(self):
+        return self._header
+
+    @property
+    def attributes(self):
+        return self._attributes
+
     def load( self ):
-        """ load specific attributes of the underlying cache file """
+        """ load the underlying cache file """
         try:
-            self.read_header()
-            self.read_attributes_desc()
-            self.read_attributes_data()
+            self._read_header()
+            self._read_attributes_desc()
+            self._read_attributes_data()
             self.handler.file.flush()
         except ICECacheVersionError:
             print 'Error - ICE Cache version not supported'
@@ -72,68 +97,48 @@ class ICEReader(object):
         if self._header == None:
             raise ICECacheDataReadError
 
-    def header(self):
-        return self._header
-
-    def attributes(self):
-        return self._attributes
-
     def find_attribute( self, name ):
         for a in self._attributes:
             if a.name == name:
                 return a
         return None
     
-    def export(self, destination_folder ):                
+    def export(self, destination_folder, fmt=CONSTS.TEXT_FMT, force = True ):                
+        if fmt==CONSTS.SIH5_FMT and h5 == None:
+            return
+
+        if fmt!=CONSTS.SIH5_FMT and fmt!=CONSTS.TEXT_FMT:
+            raise Exception('Error export format not supported')
+            return
+        
+        self._export_filename = get_export_file_path( destination_folder, self._filename,  EXT[ fmt ] )        
+
+        if force == False and os.path.isfile( self._export_filename ):
+            # reuse existing file
+            return
+        
         try:
             # load the requested attributes
             self.load( )
         except:
+            raise Exception('Error loading data: %s' % self._export_filename )
             return
-        filepath = self.get_export_file_path( destination_folder )
-        self._export( filepath )        
-    
-    def get_export_file_path( self, destination_folder ):
-        """ create export folder """
-        filepath = os.path.join(destination_folder, os.path.basename(self._filename)  ) + '.txt'
-        return filepath
-
+        
+        try:
+            if fmt == CONSTS.TEXT_FMT:
+                to_ascii( self._export_filename, self )
+            elif fmt == CONSTS.SIH5_FMT:
+                to_sih5( self._export_filename, self )
+        except:
+            pass
+            #raise Exception('Error exporting file: %s' % self.filename )
+            
     def close(self):
         del self.handler
         self.handler = None
-
-    def _export( self, export_file_path ):                
-        """ export the underlying file to ascii """
-        f = open( export_file_path, 'w' )        
-        f.write( str(self._header) )
-        f.write( '\n' )
-                
-        for a in self._attributes:
-            # description
-            s = str(a)
-            f.write( s )
-            f.flush()
-
-            # data            
-            accessor = dataAccessorPool.accessor(a.datatype,a.structtype)
-            
-            if a.name in self._data:     
-                data_array = self._data[ a.name ]
-                if a.isconstant == True:
-                    data_array = [ self._data[ a.name ][0] ]
-                f.write( accessor.format( data_array ) )
-
-            f.write( '\n' )
-            f.flush()
-            
-        f.close()
-            
-    def __getitem__( self, arg ):
-        """ return data buffer by name """
-        return self._data[ arg ]
-
+               
     # Internals
-    def read_header(self):        
+    def _read_header(self):        
         """ Read header section. Supported versions are 102 and 103. """
         try:            
             v = self.handler.icecache_version()            
@@ -144,7 +149,7 @@ class ICEReader(object):
             else:
                 raise ICECacheVersionError        
         except:
-            print 'Error - ICE Cache version not supported'
+            report_error( 'Error - ICE Cache version not supported', sys.exc_info() )
             return
         
         try:
@@ -155,20 +160,20 @@ class ICEReader(object):
 
         return self._header
 
-    def read_attributes_desc(self):       
+    def _read_attributes_desc(self):       
         """ Read all attribute descriptions """
         if self._header == None:
             return None        
         
         self._attributes = []
         for i in range(self._header.attribute_count):            
-            attrib = Attribute()        
+            attrib = Attribute(self)        
             attrib.read( self.handler )            
             self._attributes.append( attrib )
         
         return self._attributes
 
-    def read_attributes_data( self ):
+    def _read_attributes_data( self ):
         """ Read all attributes data. """
         if self._header == None:
             return None        
@@ -265,46 +270,6 @@ class ICEReader(object):
                             index +=1
                         accessor.release_block()
                     
-def get_files_from_cache_folder( dir ):
-    """ Get all cache files from dir and sort them by frame number """                
-    files = []
-    # grab the files
-    for dirname, dirnames, filenames in os.walk(dir):
-        filenames = filter( lambda x: x.endswith('.icecache'), filenames )        
-        for filename in filenames:
-            files.append( os.path.join(dirname, filename) ) 
-    
-    return get_files( files )
-    
-def get_files( files ):
-    """ sort function by the cache frame number embedded in the file name """
-    def cmp_by_num (x,y):
-        def get_last_num(str): 
-            return float(re.findall(r'\d+',str)[-1])
-        
-        nx = get_last_num(x)
-        ny = get_last_num(y)
-        if nx < ny:
-            return -1
-        elif nx > ny:
-            return 1
-        return 0
-    
-    files.sort( cmp_by_num )
-
-    if files == []:
-        # no files to process
-        return ()
-        
-    # extract start and end cache number    
-    start = int(re.findall(r'\d+',files[0])[-1])
-    end = int(re.findall(r'\d+',files[-1])[-1])
-    
-    if end > len(files):
-        end = (start + len(files)) -1 
-
-    return (files,start,end)
-
 def is_valid_file( cachefile ):
     return cachefile.endswith('.icecache')
     
@@ -320,8 +285,9 @@ class HeaderV102(object):
         self.sample_count = 0
         self.blob_count = 0
         self.attribute_count = 0
-
-    def read( self, handler ):
+        self.substeps_count = 0
+        
+    def read( self, handler ):        
         self.name = handler.read_header_name( )
         self.version = handler.read_int( )
         self.type = handler.read_int( )
@@ -331,6 +297,19 @@ class HeaderV102(object):
         self.sample_count = handler.read_int( )
         self.blob_count = handler.read_int( )
         self.attribute_count = handler.read_int( )
+
+    def __getitem__( self, arg ):
+        """ return attribute by name """
+        return self.__dict__[ arg ]
+
+    def __iter__(self):
+        """ Iterate over the names of dictionary. """
+        for name in self.__dict__:
+            yield name
+
+    def __contains__(self, name):
+        """ Test if a member name exists """
+        return name in self.__dict__
 
     def __str__(self):
         return  ("[Header info]\nname = %s\nversion = %d\ntype = %s\nparticle_count = %d\nedge_count = %d\npolygon_count = %d\nsample_count = %d\nblob_count = %d\nattribute_count = %d\n") % ( self.name, self.version, objtype_to_string(self.type), self.particle_count, self.edge_count, self.polygon_count, self.sample_count, self.blob_count, self.attribute_count )
@@ -347,7 +326,7 @@ class HeaderV103(object):
         self.sample_count = 0
         self.blob_count = 0
         self.attribute_count = 0
-        self.substepscount = 0
+        self.substeps_count = 0
 
     def read( self, handler ):
         self.name = handler.read_header_name( )
@@ -357,16 +336,29 @@ class HeaderV103(object):
         self.edge_count = handler.read_int( )
         self.polygon_count = handler.read_int( )
         self.sample_count = handler.read_int( )
-        self.substepscount = handler.read_int( )
+        self.substeps_count = handler.read_int( )
         self.blob_count = handler.read_int( )
         self.attribute_count = handler.read_int( )
 
+    def __getitem__( self, arg ):
+        """ return attribute by name """
+        return self.__dict__[ arg ]
+
+    def __iter__(self):
+        """ Iterate over the names of dictionary. """
+        for name in self.__dict__:
+            yield name
+
+    def __contains__(self, name):
+        """ Test if a member name exists """
+        return name in self.__dict__
+
     def __str__(self):
-        return  ("[Header info]\nname = %s\nversion = %d\ntype = %s\nparticle_count = %d\nedge_count = %d\npolygon_count = %d\nsample_count = %d\nblob_count = %d\nattribute_count = %d\nsubstepscount = %d\n\n") % ( self.name, self.version, objtype_to_string(self.type), self.particle_count, self.edge_count, self.polygon_count, self.sample_count, self.blob_count, self.attribute_count, self.substepscount )
+        return  ("[Header info]\nname = %s\nversion = %d\ntype = %s\nparticle_count = %d\nedge_count = %d\npolygon_count = %d\nsample_count = %d\nblob_count = %d\nattribute_count = %d\nsubsteps_count = %d\n\n") % ( self.name, self.version, objtype_to_string(self.type), self.particle_count, self.edge_count, self.polygon_count, self.sample_count, self.blob_count, self.attribute_count, self.substeps_count )
 
 class Attribute(object):
     """ ICECache Attribute object """
-    def __init__(self):
+    def __init__(self,reader):
         self.name = None
         self.datatype = 0
         self.structtype = 0
@@ -375,8 +367,9 @@ class Attribute(object):
         self.category = 0
         self.ptlocator_size = 0
         self.blobtype_count = 0
-        self.blobtype_names = ()
+        self.blobtype_names = ('')
         self.isconstant = True
+        self._reader = reader
 
     def read( self, handler ):
         self.name = handler.read_name()
@@ -384,6 +377,7 @@ class Attribute(object):
         
         if self.datatype == CONSTS.siICENodeDataCustomType:
             self.blobtype_count = handler.read_ulong()            
+            attrib.blobtype_names = ()
             for i in range( self.blobtype_count ):
                 attrib.blobtype_names.append( handler.read_name() )                
 
@@ -394,6 +388,26 @@ class Attribute(object):
 
         if self.datatype == CONSTS.siICENodeDataLocation:
             self.ptlocator_size = handler.read_ulong()
+
+    @property
+    def data(self):
+        try:
+            return self._reader[ self.name ]
+        except:
+            return []
+
+    def __getitem__( self, arg ):
+        """ return attribute by name """
+        return self.__dict__[ arg ]
+
+    def __iter__(self):
+        """ Iterate over the names of dictionary. """
+        for name in self.__dict__:
+            yield name
+
+    def __contains__(self, name):
+        """ Test if a member name exists """
+        return name in self.__dict__
         
     def __str__(self):
         s = ("[Attribute info]\nname = %s\ndatatype = %s\nstructtype = %s\ncontexttype = %s\nobjid = %d\ncategory = %s\nptlocator_size = %d\nis constant = %d\n\n") % ( self.name, datatype_to_string(self.datatype), structtype_to_string(self.structtype), contexttype_to_string(self.contexttype), self.objid, categorytype_to_string(self.category), self.ptlocator_size, self.isconstant )
@@ -411,8 +425,8 @@ class ICECacheDataAccessorError(Exception) :
     """ICECache data accessor error"""
     pass
 
-def test():
-    r = ICEReader(r'C:\dev\icecache_data\cache50\2.icecache')
+def test1():
+    r = ICEReader(r'C:\dev\icecache_data\14.icecache')
     h = r.read_header()
     print h
     a = r.read_attributes_desc()
@@ -422,10 +436,35 @@ def test():
     print r[ 'PointPosition___' ]
 
 def test2():
-    r = ICEReader(r'C:\dev\icecache_data\cache75\pouring_liquid_pointcloud_SimTake1_9.icecache')
+    r = ICEReader(r'C:\dev\icecache_data\16.icecache')
     r.load( )
-    print r[ 'Size' ]
+    try:
+        print r[ 'Size' ]
+    except:
+        try:
+            print r[ 'Color___' ]
+        except:
+            pass
 
+def test3(): 
+    r = ICEReader(r'C:\dev\icecache_data\14.icecache')
+    folder = r'C:\temp'
+    r.export( folder, fmt=CONSTS.SIH5_FMT, force=True )
+
+    r = ICEReader(r'C:\dev\icecache_data\16.icecache')
+    folder = r'C:\temp'
+    r.export( folder, fmt=CONSTS.TEXT_FMT, force=True )
+
+def test4(): 
+    r = ICEReader(r'C:\dev\icecache_data\cache50\15.icecache')
+    folder = r'C:\dev\svn\cache_test\.iceexplorer'
+    r.load( )
     
+    for a in r.header:
+        print a, r.header[a]
+
 if __name__ == '__main__':
+    #test1()
     test2()
+    test3()
+    #test4()

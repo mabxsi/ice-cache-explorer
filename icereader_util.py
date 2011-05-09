@@ -1,5 +1,5 @@
 ###############################################################################
-# ICE Cache Explorer: A viewer and reader for ICE cache data
+# ICE Explorer: A viewer and reader for ICE cache data
 # Copyright (C) 2010  M.A. Belzile
 # 
 # This program is free software: you can redistribute it and/or modify
@@ -23,6 +23,8 @@ import struct
 import numpy as np
 from cStringIO import StringIO 
 from consts import CONSTS
+import re
+import h5py as h5
 
 __all__ = [
     'ICECacheDataReadError',
@@ -33,9 +35,178 @@ __all__ = [
     'categorytype_to_string',
     'objtype_to_string',
     'report_error',
-    'ICECacheFileHandler']
+    'ICECacheFileHandler',
+    'get_files_from_cache_folder',
+    'get_export_file_path',
+    'get_files',
+    'to_sih5',
+    'to_ascii',
+    'attribs_to_str',
+    'traceit',
+    'EXT'
+    ]
+
+EXT = []
+EXT.append( '.txt')
+EXT.append( '.sih5' )
+EXT.append( '.icecache' )
+
+def get_files_from_cache_folder( dir ):
+    """ Get all cache files from dir and sort them by frame number """                
+    files = []
+    # grab the files
+    for dirname, dirnames, filenames in os.walk(dir):
+        if dirname == dir:
+            filenames = filter( lambda x: x.endswith( '.icecache' ) or x.endswith( '.sih5' ) or x.endswith( '.hdf5' ), filenames )        
+            for filename in filenames:
+                files.append( os.path.join(dirname, filename) ) 
+    
+    return get_files( files )
+    
+def get_files( files ):
+    """ sort function by the cache frame number embedded in the file name """
+    def cmp_by_num (x,y):
+        def get_nums(str): 
+            ext = os.path.splitext( x )[1]            
+            idx = -1
+            if ext == '.sih5':
+                idx = -2
+            return float(re.findall(r'\d+',str)[idx])
+        
+        nx = get_nums(x)
+        ny = get_nums(y)
+        if nx < ny:
+            return -1
+        elif nx > ny:
+            return 1
+        return 0
+    
+    files.sort( cmp_by_num )
+ 
+    if files == []:
+        # no files to process
+        return ()
+        
+    # extract start and end cache number    
+    first = os.path.splitext( files[0] )[0]
+    last = os.path.splitext( files[-1] )[0]
+    start = int(re.findall(r'\d+',first)[-1])        
+    end = int(re.findall(r'\d+',last)[-1])
+    
+    if end > len(files):
+        end = (start + len(files)) -1 
+
+    return (files,start,end)
+
+def get_export_file_path( dst, fname, ext='.txt' ):
+    """ create export file path """
+    if ext != None:
+        filepath = os.path.join(dst, os.path.basename(fname)) + ext
+    else:
+        filepath = os.path.join(dst, os.path.basename(fname))
+    return filepath
+
+def to_sih5( target, src ):
+    """ 
+    Copy src to sih5 (HDF5) target object. 
+    target: sih5 file object or full file path
+    src: container object with ICE cache data. Typically a ICEReader, H5Reader or any object supporting a similar interface.
+    """
+    if target == None:
+        return
+
+    h5_obj = None
+    ish5 = isinstance(target, h5.highlevel.File)
+    if ish5:
+        h5_obj = target
+    else:
+        try:
+            h5_obj = h5.File( target, 'w' )
+        except:
+            raise Exception('Error exporting to SIH5: invalid arguments')
+            return
+    
+    # create the header group
+    hg = h5_obj.create_group('HEADER')
+        
+    hg.attrs['name'] = src.header['name']
+    hg.attrs['version'] = src.header['version']
+    hg.attrs['type'] = src.header['type']
+    hg.attrs['particle_count'] = src.header['particle_count']
+    hg.attrs['edge_count'] = src.header['edge_count']
+    hg.attrs['polygon_count'] = src.header['polygon_count']
+    hg.attrs['sample_count'] = src.header['sample_count']
+    hg.attrs['blob_count'] = src.header['blob_count']
+    hg.attrs['attribute_count'] = src.header['attribute_count']
+    hg.attrs['substeps_count'] = src.header['substeps_count']
+            
+    attrib_group = h5_obj.create_group('ATTRIBS')
+    for a in src.attributes:
+        g = attrib_group.create_group(a['name'])
+        g.attrs['name'] = a['name']
+        g.attrs['datatype'] = a['datatype']
+        g.attrs['structtype'] = a['structtype']
+        g.attrs['contexttype'] = a['contexttype']
+        g.attrs['objid'] = a['objid']
+        g.attrs['category'] = a['category']
+        g.attrs['ptlocator_size'] = a['ptlocator_size']
+        g.attrs['blobtype_count'] = a['blobtype_count']
+        g.attrs['blobtype_names'] = a['blobtype_names']
+        g.attrs['isconstant'] = a['isconstant']
+            
+        # data set
+        data_array = a.data
+        if len(data_array):
+            g.create_dataset('Data', data = data_array, compression='gzip', compression_opts=9, shuffle=True )
+
+    if not ish5:
+        # close file only if we opened the file
+        h5_obj.close()
+    
+def to_ascii( target, src ):    
+    """ 
+    Copy src to file as ascii format as defined by DataAccessor.
+    target: Full file path
+    src: container object with ICE cache data. Typically a ICEReader, H5Reader or any object supporting a similar interface.
+    """
+    
+    f = open( target, 'w' )        
+    f.write( str(src.header) )
+    f.write( '\n' )
+                
+    for a in src.attributes:
+        # description
+        f.write( str(a) )
+        f.flush()
+
+        # data
+        accessor = dataAccessorPool.accessor(a['datatype'],a['structtype'])
+        
+        data_array = a.data
+        if len(data_array):     
+            if a['isconstant'] == True:
+                f.write( accessor.format( [data_array[0]] ) )
+            else:
+                f.write( accessor.format( data_array ) )
+
+        f.write( '\n' )
+        f.flush()
+    
+    f.close()
+
+def attribs_to_str( dict ):
+    s = '[Attribute info]\n'
+    for a in dict:
+        s += '%s = %s\n' %( a, str(dict[a]) )
+    try:
+        for i in range(dict['blobtype_count']):
+            s += ("   blob %d = %s\n") % (i,dict['blobtype_name'](i))
+    except:
+        pass
+    return s
 
 class DataAccessor(object):
+    """ICE cache data accesor base class"""
     def __init__(self):
         self.handler = None
     
@@ -172,7 +343,7 @@ class DataAccessorFloat(DataAccessor):
         return 1
     
     def type(self):
-        return np.float64
+        return np.float32
 
     def format( self, array ):
         buf = ''
@@ -244,7 +415,7 @@ class DataAccessorVector3(DataAccessor):
         return 3
     
     def type(self):
-        return np.float64
+        return np.float32
 
     def format( self, array ):
         buf = ''
@@ -267,7 +438,7 @@ class DataAccessorVector4(DataAccessor):
         return 4
     
     def type(self):
-        return np.float64
+        return np.float32
 
     def format( self, array ):
         buf = ''
@@ -290,7 +461,7 @@ class DataAccessorQuaternion(DataAccessor):
         return 4
     
     def type(self):
-        return np.float64
+        return np.float32
 
     def format( self, array ):
         buf = ''
@@ -316,7 +487,7 @@ class DataAccessorColor4(DataAccessor):
         return 4
     
     def type(self):
-        return np.float64
+        return np.float32
 
     def format( self, array ):
         buf = ''
@@ -342,7 +513,7 @@ class DataAccessorMatrix33(DataAccessor):
         return 9
     
     def type(self):
-        return np.float64
+        return np.float32
 
     def format( self, array ):
         buf = ''
@@ -367,7 +538,7 @@ class DataAccessorMatrix44(DataAccessor):
         return 16
     
     def type(self):
-        return np.float64
+        return np.float32
 
     def format( self, array ):
         buf = ''

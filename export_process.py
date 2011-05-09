@@ -17,21 +17,44 @@
 ###############################################################################
 
 import sys
+import shutil
 from icereader import *
+from h5reader import *
+from consts import CONSTS
 
 def main(argv):
     
     files = eval(argv[1])
     exportdir = argv[2]
+    exportfmt = int(argv[3])
 
+    if not os.path.exists( exportdir ):
+        os.mkdir( exportdir, 777 )
+    
     # export input files
     for f in files:
-        r = ICEReader(f)
-        r.export(exportdir)
+        ext = os.path.splitext(f)[1]
+        r = None
+        try:
+            if ext == '.sih5' or ext == '.hdf5':
+                r = H5Reader( f )            
+            elif ext == '.icecache':
+                r = ICEReader( f )                        
+        except:
+            sys.stderr.write( 'Export process failed to load data: %s' % f )
+            sys.stderr.flush()
+            continue
         
+        try:
+            r.export(exportdir,exportfmt)
+        except:
+            sys.stderr.write( 'Export process failed to export: %s' % f )    
+            sys.stderr.flush()     
+            continue
+    
         # send the exported file to process output
         sys.stdout.write( f )
-        sys.stdout.flush()
+        sys.stdout.flush()   
    
 if __name__ == '__main__':
     main(sys.argv)

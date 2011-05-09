@@ -26,7 +26,9 @@
     <Compile Include="camera.py" />
     <Compile Include="consts.py" />
     <Compile Include="export_process.py" />
+    <Compile Include="h5reader.py" />
     <Compile Include="icedataloader.py" />
+    <Compile Include="icedataloader_h5.py" />
     <Compile Include="iceexplorer.py" />
     <Compile Include="iceexporter.py" />
     <Compile Include="iceloader.py" />
@@ -38,6 +40,9 @@
     <Compile Include="playback.py" />
     <Compile Include="preferences.py" />
     <Compile Include="process_pool.py" />
+    <Compile Include="ui_export_file.py" />
+    <Compile Include="ui_export_folder.py" />
+    <Compile Include="ui_prefs.py" />
     <Compile Include="view_tools.py" />
   </ItemGroup>
 </Project>

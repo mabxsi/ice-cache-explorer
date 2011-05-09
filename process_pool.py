@@ -1,5 +1,5 @@
 ###############################################################################
-# ICE Cache Explorer: A viewer and reader for ICE cache data
+# ICE Explorer: A viewer and reader for ICE cache data
 # Copyright (C) 2010  M.A. Belzile
 # 
 # This program is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ class Pool(QtCore.QObject):
     ERROR = 1
     STATE_CHANGE = 2
     OUTPUT_MSG = 3
-    OUTPUT_ERROR = 4
+    OUTPUT_ERROR_MSG = 4
     FINISHED = 5
     
     # callback exception
@@ -137,7 +137,7 @@ class Pool(QtCore.QObject):
             if self._callback != None:            
                 self._callback( self.sender(), self.STARTED, None )
         except:
-             print '_on_process_started error: %s' % sys.exc_info()[0]
+             print '_on_process_started error: %s' % sys.exc_info()[1]
      
     def _on_process_error(self,error):
         errors = ["Failed to start", "Crashed", "Timedout", "Read error", "Write Error", "Unknown Error"]        
@@ -146,7 +146,7 @@ class Pool(QtCore.QObject):
             if self._callback != None:            
                 self._callback( self.sender(), self.ERROR, errors[error] )
         except:
-             print '_on_process_error error: %s' % sys.exc_info()[0]
+             print '_on_process_error error: %s' % sys.exc_info()[1]
              
     def _on_process_state_change(self,new_state):
         states = ["Not running", "Starting", "Running"]
@@ -155,7 +155,7 @@ class Pool(QtCore.QObject):
             if self._callback != None:
                 self._callback( self.sender(), self.STATE_CHANGE, states[new_state] )
         except:
-             print '_on_process_state_change error: %s' % sys.exc_info()[0]
+             print '_on_process_state_change error: %s' % sys.exc_info()[1]
              
     def _on_process_output(self):
         try:
@@ -167,9 +167,9 @@ class Pool(QtCore.QObject):
     def _on_process_error_output(self):
         try:            
             if self._callback != None:            
-                self._callback( self.sender(), self.OUTPUT_ERROR, None )
+                self._callback( self.sender(), self.OUTPUT_ERROR_MSG, None )
         except:
-            print '_on_process_error_output error: %s' % sys.exc_info()[0]
+            print '_on_process_error_output error: %s' % sys.exc_info()[1]
 
     def _on_process_finished(self):
         #print 'process finished: %s' % (str(self.sender()))

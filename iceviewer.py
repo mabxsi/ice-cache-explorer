@@ -1,5 +1,5 @@
 ###############################################################################
-# ICE Cache Explorer: A viewer and reader for ICE cache data
+# ICE Explorer: A viewer and reader for ICE cache data
 # Copyright (C) 2010  M.A. Belzile
 # 
 # This program is free software: you can redistribute it and/or modify
@@ -45,20 +45,22 @@ except:
     sys.exit()
 
 from camera import Camera
-from icereader import ICEReader, get_files_from_cache_folder, get_files, is_valid_file
+import icereader as icer 
+import h5reader as h5r 
 from basics import Vec3
-from icereader_util import traceit
+from icereader_util import traceit, get_files_from_cache_folder, get_files
 from view_tools import ToolManager
 from iceloader import ICECacheLoader
 
 import time
-   
+
 class ICEViewer(QtOpenGL.QGLWidget):
     """ OpenGL viewer for viewing ICE cache data. """
     # PyQt signal slot functions declaration
     
     # arg: cache index, file reader object
-    cacheLoaded = QtCore.pyqtSignal(int, object) 
+    #cacheLoaded = QtCore.pyqtSignal(int, object) 
+    cacheLoaded = QtCore.pyqtSignal(int, str) 
     # args: number of files, start cache, end cache
     beginCacheLoading = QtCore.pyqtSignal(int,int,int)
     endCacheLoading = QtCore.pyqtSignal(int,int,int)
@@ -74,210 +76,191 @@ class ICEViewer(QtOpenGL.QGLWidget):
     def __init__(self, parent=None, x=0, y=0, w=640, h=480):      
         super(ICEViewer, self).__init__(parent)
         
-        self.camera = Camera(1., Vec3(20,30,30), Vec3(0,0,0), Vec3(0,1,0))
+        self._camera = Camera(1., Vec3(20,30,30), Vec3(0,0,0), Vec3(0,1,0))
 
         # init the animation parameters
-        self.cache_count = 0
-        self.start_cache = 1
-        self.end_cache = 100
-        self.current_cache = 1
-        self.playback_timerid = -1
-        self.playback_time_elapse = 10
-        self.load_start_time = 0
-        self.play_state = False
-        self.loop_state = False
+        self._cache_count = 0
+        self._start_cache = 1
+        self._end_cache = 100
+        self._current_cache = 1
+        self._playback_timerid = -1
+        self._playback_time_elapse = 10
+        self._load_start_time = 0
+        self._play_state = False
+        self._loop_state = False
         
-        self.point_arrays = {}
-        self.color_arrays = {}
-        self.size_arrays = {}
-        self.statusbar = self.parentWidget().statusBar()
-        self.right_msg = parent.right_msg
-        self.cache_loading = False
+        self._statusbar = self.parentWidget().statusBar()
+        self._right_msg = parent.right_msg
+        self._cache_loading = False
 
         # view tools management
-        self.toolmgr = ToolManager(self)
+        self._toolmgr = ToolManager(self)
                 
-        # Cache loader worker thread
-        self.cache_loader = ICECacheLoader(parent)
-        self.cache_loader.beginCacheLoading.connect( self.on_begin_cacheloading )
-        self.cache_loader.cacheLoaded.connect( self.on_cache_loaded )                
-        self.cache_loader.endCacheLoading.connect( self.on_end_cacheloading )
+        # Cache loader object
+        self._cache_loader = ICECacheLoader(parent)
+        self._cache_loader.beginCacheLoading.connect( self.on_begin_cacheloading )
+        self._cache_loader.cacheLoaded.connect( self.on_cache_loaded )                
+        self._cache_loader.endCacheLoading.connect( self.on_end_cacheloading )
 
         self.setAcceptDrops( True )                    
         self.setFocusPolicy( QtCore.Qt.StrongFocus )    
 
-        self.__create_grid_data__( self.GRID_SIZE )
+        self._create_grid_data( self.GRID_SIZE )
 
     def __del__(self):
-        self.__stop_playback_timer__( )
+        self._stop_playback_timer( )
 
-    def get_data( self, attribname, cache ):
-        """Retrieve the display data"""
-        if 'PointPosition___' == attribname and cache in self.point_arrays:
-            return self.point_arrays[cache]
-        if 'Color___' == attribname and cache in self.color_arrays:
-            return self.color_arrays[cache]
-        if 'Size' == attribname and cache in self.size_arrays:
-            return self.size_arrays[cache]
-        return []
-             
+    @property
+    def cache(self):
+        return self._cache_loader
+
+    @property
+    def camera(self):
+        return self._camera
+
+    @property
+    def right_msg(self):
+        return self._right_msg
+        
     def stop_loading(self):
         """ cancel current loading job """
         self.__stop_playback__()
-        self.cache_loader.cancel()
+        self._cache_loader.cancel()
         
     def load_files( self, files ):
-        """ Load one or multiple cache files. """
-        self.point_arrays = {}
-        self.color_arrays = {}
-        self.size_arrays = {}
-        
+        """ Load one or multiple cache files. """        
         (files, startcache, endcache) = get_files( files )
-        self.__load_icecache_files__( files, startcache, endcache )        
+        self._load_icecache_files( files, startcache, endcache )        
                     
     def load_files_from_folder(self, dir ):
-        """ Load all cache files located in dir """
-        self.point_arrays = {}
-        self.color_arrays = {}
-        self.size_arrays = {}
-        
+        """ Load all cache files located in dir """        
         (files,startcache,endcache) = get_files_from_cache_folder( dir )
-        self.__load_icecache_files__( files, startcache, endcache )
+        self._load_icecache_files( files, startcache, endcache )
 
-    def perspective_view(self):
+    def perspective_view(self): 
         """ Set the OGL view as a perspective view. """
-        self.toolmgr['PAN' ].panning_vec = Vec3(0,0,0)
-        self.camera.set(Vec3(20,30,30), Vec3(0,0,0), Vec3(0,1,0))     
+        self._toolmgr['PAN' ].panning_vec = Vec3(0,0,0)
+        self._camera.set(Vec3(20,30,30), Vec3(0,0,0), Vec3(0,1,0))     
         self._updateGL()
                 
     def top_view(self):
         """ Set the OGL view to look through Y axis. """
-        self.toolmgr['PAN' ].panning_vec = Vec3(0,0,0)
-        self.camera.set(Vec3(0,30,0), Vec3(0,0,0), Vec3(1,0,0))     
+        self._toolmgr['PAN' ].panning_vec = Vec3(0,0,0)
+        self._camera.set(Vec3(0,30,0), Vec3(0,0,0), Vec3(1,0,0))     
         self._updateGL()
 
     def front_view(self):
         """ Set the OGL view to look through Z axis. """
-        self.toolmgr['PAN' ].panning_vec = Vec3(0,0,0)
-        self.camera.set(Vec3(0,0,40), Vec3(0,0,0), Vec3(0,1,0))          
+        self._toolmgr['PAN' ].panning_vec = Vec3(0,0,0)
+        self._camera.set(Vec3(0,0,40), Vec3(0,0,0), Vec3(0,1,0))          
         self._updateGL()
 
     def right_view(self):
         """ Set the OGL view to look through X axis. """
-        self.toolmgr['PAN' ].panning_vec = Vec3(0,0,0)
-        self.camera.set(Vec3(40,0,0), Vec3(0,0,0), Vec3(0,1,0))            
+        self._toolmgr['PAN' ].panning_vec = Vec3(0,0,0)
+        self._camera.set(Vec3(40,0,0), Vec3(0,0,0), Vec3(0,1,0))            
         self._updateGL()
         
     def left_view(self):
         """ Set the OGL view to look through -X axis. """
-        self.toolmgr['PAN' ].panning_vec = Vec3(0,0,0)
-        self.camera.set(Vec3(-40,0,0), Vec3(0,0,0), Vec3(0,1,0))            
+        self._toolmgr['PAN' ].panning_vec = Vec3(0,0,0)
+        self._camera.set(Vec3(-40,0,0), Vec3(0,0,0), Vec3(0,1,0))            
         self._updateGL()
 
     def orbit_tool(self):
         """ Activate the orbit tool """
-        self.toolmgr.activate_tool( self.toolmgr[ 'ORBIT' ] ) 
+        self._toolmgr.activate_tool( self._toolmgr[ 'ORBIT' ] ) 
         
     def pan_tool(self):
         """ Activate the pan tool """
-        self.toolmgr.activate_tool( self.toolmgr[ 'PAN' ] ) 
+        self._toolmgr.activate_tool( self._toolmgr[ 'PAN' ] ) 
 
     def zoom_tool(self):
         """ Activate the zoom tool """
-        self.toolmgr.activate_tool( self.toolmgr[ 'ZOOM' ] ) 
+        self._toolmgr.activate_tool( self._toolmgr[ 'ZOOM' ] ) 
 
     # internals
-    def __load_icecache_files__( self, files, startcache, endcache ):
+    def _load_icecache_files( self, files, startcache, endcache ):
         """ Start worker thread to load icecache files """
-        self.cache_count = len(files)
-        self.start_cache = startcache
-        self.end_cache = endcache
-        self.current_cache = startcache
+        self._cache_count = len(files)
+        self._start_cache = startcache
+        self._end_cache = endcache
+        self._current_cache = startcache
         
         # start loading the file caches
-        self.load_start_time = time.clock()
-        self.cache_loader.load_cache_files( files, startcache, endcache )        
+        self._load_start_time = time.clock()
+        self._cache_loader.load_cache_files( files, startcache, endcache )        
 
     def __start_playback__(self):
         """ Enables a timer to start the playback. The OGL view gets updated when the timer is triggered. """            
-        if self.current_cache == self.end_cache:
-            self.current_cache = self.start_cache                        
+        if self._current_cache == self._end_cache:
+            self._current_cache = self._start_cache                        
         self.__start_playback_timer__( )
 
     def __stop_playback__(self):
         """ Stop the playback timer to stop the playback"""
-        self.__stop_playback_timer__()
+        self._stop_playback_timer()
     
     def __start_playback_timer__( self ):
         """ Stop any running playback timer and restart a new playback timer"""
-        self.__stop_playback_timer__()
-        self.playback_timerid = self.startTimer( self.playback_time_elapse )
+        self._stop_playback_timer()
+        self._playback_timerid = self.startTimer( self._playback_time_elapse )
 
-    def __stop_playback_timer__(self):
+    def _stop_playback_timer(self):
         """ Stop the the playback timer if any """
         try:
             #traceit()
-            self.killTimer( self.playback_timerid )
+            self.killTimer( self._playback_timerid )
         except:
             pass
 
     # All signal slots (i.e. callbacks)
     def on_cache_change( self, cache ):
         """ Called when the playback cursor changes """
-        self.current_cache = cache
+        self._current_cache = cache
         self._updateGL()
 
     def on_start_cache_change( self, cache ):
         """ Called when the playback start cache edit box has changed """
-        self.start_cache = cache
+        self._start_cache = cache
         self._updateGL()
 
     def on_end_cache_change( self, cache ):
         """ Called when the playback end cache edit box has changed """
-        self.end_cache = cache
+        self._end_cache = cache
         self._updateGL()
 
     def on_play( self ):
         """ Called when the playback play button is pressed. The callback makes sure the current cache is properly set first and then starts the playback. """
-        self.play_state = True
-        if self.current_cache >= self.end_cache:            
+        self._play_state = True
+        if self._current_cache >= self._end_cache:            
             # reset to start cache
-            self.current_cache = self.start_cache
-        self.beginPlayback.emit( self.current_cache )
+            self._current_cache = self._start_cache
+        self.beginPlayback.emit( self._current_cache )
         self.__start_playback__()
 
     def on_stop( self ):
         """ Stops the playback when the playback play button is released. """
-        self.play_state = False
+        self._play_state = False
         self.__stop_playback__()
 
     def on_loop( self, bFlag ):
         """ Called when the playback loop button is pressed or depressed. """
-        self.loop_state = bFlag
+        self._loop_state = bFlag
 
     def on_begin_cacheloading(self):
-        """ Called by the ICECacheLoader thread at the beginning of the file loading process """
-        self.cache_loading = True
-        self.beginCacheLoading.emit( self.cache_count, self.start_cache, self.end_cache )
+        """ Called by the ICECacheLoader object at the beginning of the file loading process """
+        self._cache_loading = True
+        self.beginCacheLoading.emit( self._cache_count, self._start_cache, self._end_cache )
 
     def on_end_cacheloading(self):
-        """ Called by the ICECacheLoader thread at the end of the file loading process """
-        self.endCacheLoading.emit( self.cache_count, self.start_cache, self.end_cache )        
-        self.cache_loading = False
+        """ Called by the ICECacheLoader object at the end of the file loading process """
+        self.endCacheLoading.emit( self._cache_count, self._start_cache, self._end_cache )        
+        self._cache_loading = False
 
-    def on_cache_loaded(self, cacheindex, data ):
-        """ Called by the ICECacheLoader thread for every file loaded """
-        self.current_cache = cacheindex
-        (filename, points, colors, sizes) = data
-
-        #print 'cacheindex %d' % cacheindex
-        if len(points):
-            self.point_arrays[cacheindex] = points
-        if len(colors):
-            self.color_arrays[cacheindex] = colors
-        if len(sizes):
-            self.size_arrays[cacheindex] = sizes
-
+    def on_cache_loaded(self, cacheindex, filename ):
+        """ Called by the ICECacheLoader object for every file loaded """
+        self._current_cache = cacheindex
         # re-emit to viewer clients
         self.cacheLoaded.emit( cacheindex, filename )        
         self._updateGL()
@@ -292,7 +275,7 @@ class ICEViewer(QtOpenGL.QGLWidget):
 
     def dropEvent(self, e):
         """ Load valid icecache files from event """
-        self.statusbar.clearMessage()
+        self._statusbar.clearMessage()
         files = []
         for url in e.mimeData().urls():
             f = url.toLocalFile()
@@ -304,8 +287,8 @@ class ICEViewer(QtOpenGL.QGLWidget):
                 if t != ():
                     (files,st,end) = t
                 break
-            else:
-                self.statusbar.showMessage( 'Error - Invalid file: %s\n' % f )
+            else: 
+                self._statusbar.showMessage( 'Error - Invalid file: %s\n' % f )
 
         # Performs a basic file extention test just to make sure we have valid files to load
         files_to_load = [ f for f in files if is_valid_file( f ) == True ]
@@ -313,7 +296,7 @@ class ICEViewer(QtOpenGL.QGLWidget):
         if len(files_to_load):
             self.load_files( files_to_load )
         else:
-            self.statusbar.showMessage( 'Error - Invalid file' )
+            self._statusbar.showMessage( 'Error - Invalid file' )
         
     def keyPressEvent( self, event ):
         """ Keyboard handler """
@@ -340,27 +323,27 @@ class ICEViewer(QtOpenGL.QGLWidget):
             return
             
         if key == QtCore.Qt.Key_Up:
-            self.camera.move( 0.02 )
+            self._camera.move( 0.02 )
             self._updateGL()
             return 
             
         if key == QtCore.Qt.Key_Down:
-            self.camera.move( -0.02 )
+            self._camera.move( -0.02 )
             self._updateGL()
             return
             
         if key == QtCore.Qt.Key_Right:
-            self.camera.turn( -0.01, 0, 1, 0 )
+            self._camera.turn( -0.01, 0, 1, 0 )
             self._updateGL()
             return
             
         if key == QtCore.Qt.Key_Left:
-            self.camera.turn( 0.01, 0, 1, 0 )
+            self._camera.turn( 0.01, 0, 1, 0 )
             self._updateGL()
             return
 
         # delegate to the tool mananger for handling the current interactive tool
-        if self.toolmgr.keyPressEvent( event ):
+        if self._toolmgr.keyPressEvent( event ):
             self._updateGL()
             return
         
@@ -369,15 +352,15 @@ class ICEViewer(QtOpenGL.QGLWidget):
         
     def mousePressEvent(self, event):       
         """ Handler called when a mouse button is down. We just delegate to the tool mananger for handling the current interactive tool. """
-        self.toolmgr.mousePressEvent( event )
+        self._toolmgr.mousePressEvent( event )
 
     def mouseReleaseEvent(self, event):        
         """ Handler called when a mouse button is up. We just delegate to the tool mananger for handling the current interactive tool. """
-        self.toolmgr.mouseReleaseEvent( event )
+        self._toolmgr.mouseReleaseEvent( event )
 
     def mouseMoveEvent(self, event):        
         """ Handler called when a mouse is moving. We just delegate to the tool mananger for handling the current interactive tool. If the tool is managed then the OGL view is updated."""        
-        if self.toolmgr.mouseMoveEvent(event):
+        if self._toolmgr.mouseMoveEvent(event):
             self._updateGL()
                     
     def initializeGL(self):
@@ -405,7 +388,7 @@ class ICEViewer(QtOpenGL.QGLWidget):
         glViewport(0, 0, w, h)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        self.camera.frustum( w, h )        
+        self._camera.frustum( w, h )        
         glMatrixMode(GL_MODELVIEW)
 
     def paintGL(self):
@@ -416,10 +399,10 @@ class ICEViewer(QtOpenGL.QGLWidget):
         glLoadIdentity()
 
         # always draw the pan tool
-        self.toolmgr['PAN' ].draw()
+        self._toolmgr['PAN' ].draw()
         
         # Update the camera lookup
-        self.camera.draw()
+        self._camera.draw()
         
         # grid        
         glLineWidth(1.0)
@@ -427,7 +410,7 @@ class ICEViewer(QtOpenGL.QGLWidget):
         glPushMatrix()
         glTranslate( self.GRID_SIZE/2, 0, self.GRID_SIZE/2 )
         glColor3f( .5, .5, .5 )
-        glVertexPointerd( self.grid_array )
+        glVertexPointerf( self.grid_array )
         glDrawArrays(GL_LINES, 0, len(self.grid_array))
         glPopMatrix()
         glDisableClientState(GL_VERTEX_ARRAY)
@@ -451,9 +434,11 @@ class ICEViewer(QtOpenGL.QGLWidget):
         glEnd()
         glPopMatrix()
 
-        self.beginDrawCache.emit( self.current_cache, self.cache_loading )
-
-        if self.cache_count and self.current_cache in self.point_arrays and len(self.point_arrays[ self.current_cache ]) > 0:
+        self.beginDrawCache.emit( self._current_cache, self._cache_loading )
+                
+        points = self._cache_loader.points( self._current_cache )            
+        num_points = len(points)
+        if num_points:
             # Draw the particles for the current cache (i.e. frame)
             glPushMatrix()
 
@@ -461,31 +446,28 @@ class ICEViewer(QtOpenGL.QGLWidget):
             # todo: we should use a GLSL shader to render the particle sizes
             glPointSize( 2.0 )
 
-            glEnableClientState(GL_VERTEX_ARRAY)
-            if self.current_cache in self.color_arrays:
-                glEnableClientState(GL_COLOR_ARRAY);          
-            else:
+            glEnableClientState(GL_COLOR_ARRAY)            
+            try:
+                colors = self._cache_loader.colors( self._current_cache )
+                glColorPointerf(colors)
+            except:
                 # default color
                 # todo: should be optional
                 glColor3f( 0.0, 0.7, 0.0 )
 
-            glVertexPointerd(self.point_arrays[ self.current_cache ])            
-            if self.current_cache in self.color_arrays:
-                glColorPointerd(self.color_arrays[ self.current_cache ])
-            
-            glDrawArrays(GL_POINTS, 0, len(self.point_arrays[ self.current_cache ]))
-            
+            glEnableClientState(GL_VERTEX_ARRAY)                
+            glVertexPointerf( points )                                                                
+            glDrawArrays(GL_POINTS, 0, num_points )            
             glDisableClientState(GL_VERTEX_ARRAY)
-            
-            if self.current_cache in self.color_arrays:
-                glDisableClientState(GL_COLOR_ARRAY)
 
+            glDisableClientState(GL_COLOR_ARRAY)
+            
             glPopMatrix()
 
-        self.endDrawCache.emit( self.current_cache, self.cache_loading )
+        self.endDrawCache.emit( self._current_cache, self._cache_loading )
 
-    def __create_grid_data__(self, size ):
-        self.grid_array = numpy.zeros( ((size+1)*4,3), numpy.float64 )
+    def _create_grid_data(self, size ):
+        self.grid_array = numpy.zeros( ((size+1)*4,3), numpy.float32 )
         
         for i in range( size+1 ):
             self.grid_array[i*4+0] = [-size, 0, -size + i]
@@ -496,20 +478,20 @@ class ICEViewer(QtOpenGL.QGLWidget):
     def timerEvent( self, event ):
         """ render the current cache """                
 
-        if self.current_cache == self.end_cache:
+        if self._current_cache == self._end_cache:
             # end of frames
-            self.endPlayback.emit( self.current_cache )
+            self.endPlayback.emit( self._current_cache )
 
-            if self.loop_state == False:
+            if self._loop_state == False:
                 # stop playback
                 self.__stop_playback__()
                 return
             else:
                 # reset to start cache
-                self.current_cache = self.start_cache
+                self._current_cache = self._start_cache
 
-        if self.current_cache != self.end_cache:
-            self.current_cache += 1
+        if self._current_cache != self._end_cache:
+            self._current_cache += 1
             
         self._updateGL()
         
@@ -518,16 +500,12 @@ class ICEViewer(QtOpenGL.QGLWidget):
         #traceit()
         self.updateGL()
 
+def is_valid_file( f ):
+    return icer.is_valid_file(f) or h5r.is_valid_file(f)
+
 def test():
-    viewer = ICEViewerOGL(0,0,640,480)    
+    pass
     
-    dir = r'C:\dev\icecache_data\cache6'
-
-    #viewer.log_info( dir )
-    viewer.start( dir )
-
-    glutMainLoop()      
-
 if __name__=='__main__':
     test()
 		

@@ -120,29 +120,12 @@ class ICECacheExplorerWindow(QtGui.QMainWindow):
         """ Export all cache files to text """
         self.statusBar().clearMessage()
         self.exporter.file_dialog.open( self._cache_files, CONSTS.TEXT_FMT )
-
-        """
-        folder = QtGui.QFileDialog.getExistingDirectory(self, "Select Destination Folder to Export ICECache Files", self.prefs.export_folder, QtGui.QFileDialog.ShowDirsOnly)
-        if not folder:
-            return
-
-        self.exporter.export_files( self._cache_files, folder, fmt=CONSTS.TEXT_FMT )
-        """
         
     def _export_all_to_sih5(self):
         """ Export all cache files to SIH5 """
         self.statusBar().clearMessage()
         self.exporter.file_dialog.open( self._cache_files, CONSTS.SIH5_FMT )
-        
-        """
-        self.statusBar().clearMessage()
-        folder = QtGui.QFileDialog.getExistingDirectory(self, "Select Destination Folder to Export SIH5 Files", self.prefs.export_folder, QtGui.QFileDialog.ShowDirsOnly)
-        if not folder:
-            return
-        
-        self.exporter.export_files( self._cache_files, folder, fmt=CONSTS.SIH5_FMT )
-        """
-        
+                
     def preferences(self):
         self.prefs.exec_()
 
